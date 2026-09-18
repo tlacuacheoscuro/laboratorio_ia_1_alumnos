@@ -2,17 +2,27 @@
 # -*- coding: utf-8 -*-
 """
 Generador didáctico de datos sintéticos: edad -> estatura
+"""
+Generador didáctico de datos sintéticos: edad -> estatura
 
 Este script crea un CSV con dos columnas: `age` (años) y `height` (centímetros).
-La intención es producir un dataset simple pero realista para introducir el
-flujo de trabajo de entrenamiento: generación de datos → entrenamiento → evaluación.
-
-Características importantes (didácticas):
-- Reproducibilidad mediante `seed`.
-- Ruido aleatorio para simular variabilidad natural en las medidas.
-- Curva no lineal base para que los modelos lineales simples no sean triviales.
-
+[...]
 Uso básico:
+    python3 data/generate_height_data.py --n 500 --out data/estatura_ninos.csv --seed 42
+
+Instalación de dependencias (pip):
+
+    # crear y activar un virtualenv (recomendado)
+    python3 -m venv .venv
+    source .venv/bin/activate
+
+    # instalar paquetes necesarios
+    pip install --upgrade pip
+    pip install pandas numpy
+
+Salida:
+    Archivo CSV con `n` filas y columnas `age`,`height`.
+"""
     python3 data/generate_height_data.py --n 500 --out data/estatura_ninos.csv --seed 42
 
 Salida:

@@ -10,9 +10,22 @@ Incluye:
 - Bucle de entrenamiento y evaluación periódica (MSE, MAE)
 - Guardado del estado del modelo y estadísticas necesarias para inferencia
 
+Instalación de dependencias (instrucciones didácticas):
+
+    # 1) Crear y activar un virtualenv (recomendado)
+    python3 -m venv .venv
+    source .venv/bin/activate
+
+    # 2) Actualizar pip y luego instalar paquetes necesarios
+    pip install --upgrade pip
+    pip install pandas numpy torch
+
+    # Alternativa: si usas un archivo requirements.txt
+    pip install -r requirements.txt
+
 Notas pedagógicas:
 - Para problemas reales, se deben revisar más características (sexo, peso, historial),
-  más datos, normalización adecuada según conjunto de entrenamiento, y validación cruzada.
+    más datos, normalización adecuada según conjunto de entrenamiento, y validación cruzada.
 """
 
 from __future__ import annotations
