@@ -44,6 +44,7 @@ from __future__ import annotations
 import argparse
 import os
 from typing import Tuple
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -115,7 +116,10 @@ def load_data(path: str) -> Tuple[np.ndarray, np.ndarray]:
     - Aseguramos que los tipos sean `float32` para compatibilidad con PyTorch.
     - `X` se devuelve con forma (n_samples, 1) y `y` con forma (n_samples, 1).
     """
-    df = pd.read_csv(path)
+    p = Path(path)
+    if not p.exists():
+        raise FileNotFoundError(f"Archivo de datos no encontrado: {p} \nPasa --data con la ruta correcta o ejecuta el script desde la raíz del proyecto.")
+    df = pd.read_csv(p)
     x = df[["age"]].values.astype(np.float32)
     y = df[["height"]].values.astype(np.float32)
     return x, y
@@ -132,11 +136,15 @@ def main() -> None:
     --out: ruta de guardado del modelo (estado + normalización).
     """
     p = argparse.ArgumentParser(description="Entrena una red simple edad->estatura con PyTorch")
-    p.add_argument("--data", type=str, default="data/estatura_ninos.csv")
+    # Valores por defecto relativos a la raíz del repositorio (dos niveles sobre este archivo)
+    repo_root = Path(__file__).resolve().parent.parent
+    default_data = str(repo_root / "data" / "estatura_ninos.csv")
+    default_out = str(repo_root / "models" / "estatura_model.pth")
+    p.add_argument("--data", type=str, default=default_data)
     p.add_argument("--epochs", type=int, default=300)
     p.add_argument("--batch", type=int, default=32)
     p.add_argument("--lr", type=float, default=1e-3)
-    p.add_argument("--out", type=str, default="models/estatura_model.pth")
+    p.add_argument("--out", type=str, default=default_out)
     args = p.parse_args()
 
     # 1) Cargar datos
