@@ -10,17 +10,28 @@ Incluye:
 - Bucle de entrenamiento y evaluación periódica (MSE, MAE)
 - Guardado del estado del modelo y estadísticas necesarias para inferencia
 
-Instalación de dependencias (instrucciones didácticas):
+Instalación de dependencias (pip) — Linux / macOS:
 
     # 1) Crear y activar un virtualenv (recomendado)
     python3 -m venv .venv
     source .venv/bin/activate
 
-    # 2) Actualizar pip y luego instalar paquetes necesarios
+    # 2) Actualizar pip e instalar paquetes
     pip install --upgrade pip
     pip install pandas numpy torch
 
-    # Alternativa: si usas un archivo requirements.txt
+Instalación de dependencias (pip) — Windows (PowerShell):
+
+    # 1) Crear y activar un virtualenv
+    python -m venv .venv
+    .\.venv\Scripts\Activate.ps1
+
+    # 2) Actualizar pip e instalar paquetes
+    pip install --upgrade pip
+    pip install pandas numpy torch
+
+Alternativa con requirements.txt:
+
     pip install -r requirements.txt
 
 Notas pedagógicas:
@@ -133,6 +144,20 @@ def main() -> None:
 
     # 5) Optimizador y función de pérdida
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+
+    # Elección de la función de pérdida:
+    # - MSE (Mean Squared Error, Error Cuadrático Medio): penaliza más los errores grandes
+    #   porque eleva al cuadrado la diferencia (y_true - y_pred)^2. Es útil cuando
+    #   queremos castigar fuertemente grandes desviaciones y su derivada es suave
+    #   (conviene para optimizadores que usan gradientes).
+    # - MAE (Mean Absolute Error, Error Absoluto Medio): mide la magnitud media del
+    #   error sin elevar al cuadrado, por lo que es más robusto frente a outliers
+    #   (los errores grandes no se amplifican tanto). Su derivada es discontinua
+    #   en 0, lo que puede afectar la convergencia en algunos casos.
+    # En este ejemplo usamos MSE como criterio principal (más habitual en regresión
+    # con redes neuronales) pero también reportamos MAE en la evaluación porque
+    # proporciona una medida fácil de interpretar (cm promedio de error) y ayuda a
+    # detectar si el modelo comete errores puntuales grandes.
     criterion = nn.MSELoss()
 
     # 6) Bucle de entrenamiento
