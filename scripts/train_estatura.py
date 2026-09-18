@@ -121,7 +121,27 @@ def main() -> None:
     x, y = load_data(args.data)
 
     # 2) Normalizar la entrada: importante para la convergencia del optimizador.
-    #    Guardamos media y desviación para poder normalizar datos nuevos en inferencia.
+    #
+    # Explicación didáctica (normalización z-score):
+    # - Aquí usamos normalización por media y desviación estándar (z-score):
+    #       x_norm = (x - mean) / std
+    #   Esto centra los datos en media 0 y desviación estándar 1.
+    # - ¿Por qué hacerlo?
+    #   * Mejora la estabilidad y velocidad de convergencia del optimizador (Adam/SGD),
+    #     porque las entradas están en una escala similar y las capas lineales no
+    #     reciben valores con magnitudes muy distintas.
+    #   * Evita que las activaciones se saturen en funciones no lineales (ReLU/ tanh),
+    #     reduciendo problemas de gradientes muy pequeños o grandes.
+    # - Epsilon: se añade un valor muy pequeño (`+ 1e-8`) para evitar división por cero
+    #   en el caso (hipotético) de desviación estándar nula.
+    # - Alternativas:
+    #   * Min-max scaling: (x - min) / (max - min) → útil cuando queremos mantener
+    #     valores en un rango [0,1], pero es sensible a outliers.
+    #   * Robust scaling: usar la mediana y el IQR para ser robusto a outliers.
+    # - Guardado de `mean` y `std`:
+    #   Es crucial almacenar estos parámetros calculados sobre el conjunto de entrenamiento
+    #   y reutilizarlos en inferencia (o en nuevos datos) para asegurar que la entrada
+    #   se normaliza de la misma forma que durante el entrenamiento.
     x_mean, x_std = x.mean(axis=0), x.std(axis=0) + 1e-8
     x_norm = (x - x_mean) / x_std
 
