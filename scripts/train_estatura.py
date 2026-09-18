@@ -1,12 +1,25 @@
 #!/usr/bin/env python3
 """Entrenamiento simple en PyTorch para predecir estatura a partir de la edad.
 
-Uso:
-  pip install -r requirements.txt  # contiene torch, pandas, numpy
-  python3 scripts/train_estatura.py --data data/estatura_ninos.csv
+Este archivo contiene un ejemplo mínimo y comentado para uso didáctico en clase.
+Incluye:
+- Carga de datos desde CSV
+- Normalización de la característica de entrada (edad)
+- División entrenamiento/prueba
+- Definición de una red pequeña (`SimpleNet`)
+- Bucle de entrenamiento y evaluación periódica (MSE, MAE)
+- Guardado del estado del modelo y estadísticas necesarias para inferencia
+
+Notas pedagógicas:
+- Para problemas reales, se deben revisar más características (sexo, peso, historial),
+  más datos, normalización adecuada según conjunto de entrenamiento, y validación cruzada.
 """
+
+from __future__ import annotations
+
 import argparse
 import os
+from typing import Tuple
 
 import numpy as np
 import pandas as pd
@@ -17,6 +30,20 @@ from torch.utils.data import TensorDataset, DataLoader, random_split
 
 
 class SimpleNet(nn.Module):
+    """Red neuronal simple para regresión.
+
+    Arquitectura:
+    - Capa lineal (1 -> 16)
+    - ReLU
+    - Capa lineal (16 -> 8)
+    - ReLU
+    - Capa lineal (8 -> 1)
+
+    Observaciones didácticas:
+    - La entrada es una sola característica (`age`) y la salida es una única predicción (`height`).
+    - Capas pequeñas para aprendizaje rápido en CPU y evitar overfitting en datos sintéticos.
+    """
+
     def __init__(self):
         super().__init__()
         self.net = nn.Sequential(
@@ -27,19 +54,38 @@ class SimpleNet(nn.Module):
             nn.Linear(8, 1),
         )
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Propagación hacia adelante.
+
+        x: tensor de forma (batch_size, 1)
+        retorna: tensor de forma (batch_size, 1)
+        """
         return self.net(x)
 
 
-def load_data(path):
+def load_data(path: str) -> Tuple[np.ndarray, np.ndarray]:
+    """Carga el CSV y devuelve matrices numpy para X (edad) e y (estatura).
+
+    - Aseguramos que los tipos sean `float32` para compatibilidad con PyTorch.
+    - `X` se devuelve con forma (n_samples, 1) y `y` con forma (n_samples, 1).
+    """
     df = pd.read_csv(path)
     x = df[["age"]].values.astype(np.float32)
     y = df[["height"]].values.astype(np.float32)
     return x, y
 
 
-def main():
-    p = argparse.ArgumentParser()
+def main() -> None:
+    """Función principal con argumentos de línea de comandos.
+
+    Argumentos relevantes:
+    --data: ruta al CSV con columnas `age`,`height`.
+    --epochs: número de épocas de entrenamiento.
+    --batch: tamaño de batch.
+    --lr: tasa de aprendizaje para el optimizador Adam.
+    --out: ruta de guardado del modelo (estado + normalización).
+    """
+    p = argparse.ArgumentParser(description="Entrena una red simple edad->estatura con PyTorch")
     p.add_argument("--data", type=str, default="data/estatura_ninos.csv")
     p.add_argument("--epochs", type=int, default=300)
     p.add_argument("--batch", type=int, default=32)
@@ -47,14 +93,19 @@ def main():
     p.add_argument("--out", type=str, default="models/estatura_model.pth")
     args = p.parse_args()
 
+    # 1) Cargar datos
     x, y = load_data(args.data)
-    # normalizar entrada
+
+    # 2) Normalizar la entrada: importante para la convergencia del optimizador.
+    #    Guardamos media y desviación para poder normalizar datos nuevos en inferencia.
     x_mean, x_std = x.mean(axis=0), x.std(axis=0) + 1e-8
     x_norm = (x - x_mean) / x_std
 
+    # Convertir a tensores de PyTorch (float32)
     X = torch.from_numpy(x_norm)
     Y = torch.from_numpy(y)
 
+    # 3) Preparar dataset y dividir en entrenamiento/prueba (80/20)
     dataset = TensorDataset(X, Y)
     n_test = int(0.2 * len(dataset))
     n_train = len(dataset) - n_test
@@ -63,11 +114,17 @@ def main():
     train_loader = DataLoader(train_set, batch_size=args.batch, shuffle=True)
     test_loader = DataLoader(test_set, batch_size=args.batch)
 
+    # 4) Configurar dispositivo (GPU si está disponible)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = SimpleNet().to(device)
+
+    # 5) Optimizador y función de pérdida
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     criterion = nn.MSELoss()
 
+    # 6) Bucle de entrenamiento
+    #    - Calculamos la pérdida MSE sobre el batch, backprop y actualizamos parámetros.
+    #    - Almacenar promedio ponderado por número de muestras para reporting.
     for epoch in range(1, args.epochs + 1):
         model.train()
         running = 0.0
@@ -78,11 +135,12 @@ def main():
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+            # loss.item() es la media por elemento del batch; multiplicamos por tamaño del batch
             running += loss.item() * xb.size(0)
         train_loss = running / n_train
 
+        # 7) Evaluación periódica: calculamos MSE y MAE en el conjunto de prueba
         if epoch % 50 == 0 or epoch == 1:
-            # evaluar
             model.eval()
             with torch.no_grad():
                 test_losses = []
@@ -90,12 +148,15 @@ def main():
                 for xb, yb in test_loader:
                     xb, yb = xb.to(device), yb.to(device)
                     pred = model(xb)
+                    # MSE por batch ponderado
                     test_losses.append(criterion(pred, yb).item() * xb.size(0))
+                    # MAE por batch ponderado (promedio absoluto)
                     maes.append(torch.abs(pred - yb).mean().item() * xb.size(0))
                 test_loss = sum(test_losses) / n_test
                 mae = sum(maes) / n_test
             print(f"Epoch {epoch:03d}  Train MSE: {train_loss:.4f}  Test MSE: {test_loss:.4f}  Test MAE: {mae:.4f}")
 
+    # 8) Guardar el modelo y la normalización (necesarios para inferencia posterior)
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     torch.save({
         "model_state": model.state_dict(),
