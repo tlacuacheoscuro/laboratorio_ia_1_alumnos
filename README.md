@@ -2,7 +2,7 @@
 
 Archivos añadidos:
 
-- `clase5_presentacion.tex` — presentación Beamer.
+- `clase6_presentacion.tex` — presentación Beamer.
 - `data/generate_height_data.py` — script para generar el CSV sintético.
 - `data/estatura_ninos.csv` — (generado a continuación) dataset sintético.
 - `scripts/train_estatura.py` — script PyTorch para entrenar un modelo sencillo.
