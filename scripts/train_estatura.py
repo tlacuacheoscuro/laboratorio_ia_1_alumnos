@@ -180,8 +180,12 @@ def main() -> None:
     train_loader = DataLoader(train_set, batch_size=args.batch, shuffle=True)
     test_loader = DataLoader(test_set, batch_size=args.batch)
 
-    # 4) Configurar dispositivo (GPU si está disponible)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # 4) Configurar dispositivo — FORZAR CPU
+    # En este entorno docente nunca usamos CUDA (GPU). Forzamos `cpu` para:
+    # - Evitar dependencias a hardware específico en la clase
+    # - Asegurar reproducibilidad entre equipos
+    # - Evitar errores si CUDA/driver no está instalado
+    device = torch.device("cpu")
     model = SimpleNet().to(device)
 
     # 5) Optimizador y función de pérdida
