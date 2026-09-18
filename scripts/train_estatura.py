@@ -63,9 +63,31 @@ class SimpleNet(nn.Module):
     - ReLU
     - Capa lineal (8 -> 1)
 
-    Observaciones didácticas:
-    - La entrada es una sola característica (`age`) y la salida es una única predicción (`height`).
-    - Capas pequeñas para aprendizaje rápido en CPU y evitar overfitting en datos sintéticos.
+        Observaciones didácticas:
+        - La entrada es una sola característica (`age`) y la salida es una única predicción (`height`).
+        - Capas pequeñas para aprendizaje rápido en CPU y evitar overfitting en datos sintéticos.
+
+        Funciones de activación (rationale):
+        - Capas ocultas: usamos `ReLU` (Rectified Linear Unit).
+            * Ventajas: es computacionalmente eficiente, introduce no saturación para
+                entradas positivas (evita gradientes muy pequeños) y suele acelerar
+                la convergencia en redes feed-forward. Además produce activaciones
+                dispersas (sparse), lo que puede mejorar generalización en redes simples.
+            * Riesgos: unidades "muertas" (si la neurona siempre produce valores
+                negativos) — solución posible: `LeakyReLU` o `ELU` si ocurre.
+            * Alternativas y cuándo usarlas:
+                - `tanh` o `sigmoid`: antes eran comunes, pero se saturan para valores
+                    grandes y producen gradientes pequeños; útiles si la salida interna
+                    debe estar acotada o para arquitecturas específicas.
+                - `LeakyReLU` / `ParametricReLU` / `ELU`: variantes que mitigan el
+                    problema de unidades muertas manteniendo ventajas similares a ReLU.
+
+        - Capa de salida: no usamos activación (lineal).
+            * Razonamiento: en problemas de regresión predictiva (altura en cm) se
+                requiere una salida continua y no acotada; una función lineal permite
+                predecir cualquier valor real. Si la variable objetivo estuviera
+                acotada, podría considerarse una transformación o una activación
+                apropiada en la salida.
     """
 
     def __init__(self):
