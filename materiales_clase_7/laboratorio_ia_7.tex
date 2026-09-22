@@ -1,0 +1,263 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-nodecimaldot]{babel}
+\usepackage[a4paper,margin=2.2cm]{geometry}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{tcolorbox}
+\usepackage{parskip}
+
+\definecolor{azul}{HTML}{174A7E}
+\definecolor{azulclaro}{HTML}{EAF3FA}
+\definecolor{verdeclaro}{HTML}{EEF7EE}
+\definecolor{grisfondo}{HTML}{F5F6F7}
+\definecolor{verde}{HTML}{2E7D32}
+\definecolor{naranja}{HTML}{A64B00}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=azul,
+  urlcolor=azul,
+  pdftitle={Laboratorio IA 7: Red neuronal evolutiva}
+}
+
+\lstdefinestyle{python}{
+  language=Python,
+  basicstyle=\ttfamily\footnotesize,
+  backgroundcolor=\color{grisfondo},
+  frame=single,
+  rulecolor=\color{black!20},
+  keepspaces=true,
+  showstringspaces=false,
+  breaklines=true,
+  columns=fullflexible,
+  keywordstyle=\color{azul}\bfseries,
+  commentstyle=\color{verde},
+  stringstyle=\color{naranja}
+}
+
+\newtcolorbox{objetivo}{
+  colback=azulclaro,
+  colframe=azul,
+  boxrule=0.8pt,
+  arc=2pt,
+  title=Objetivo de la sesion,
+  fonttitle=\bfseries\color{azul}
+}
+
+\newtcolorbox{idea}{
+  colback=verdeclaro,
+  colframe=verde,
+  boxrule=0.8pt,
+  arc=2pt,
+  title=Idea clave,
+  fonttitle=\bfseries\color{verde}
+}
+
+\newtcolorbox{reto}[1]{
+  colback=white,
+  colframe=azul,
+  boxrule=0.8pt,
+  arc=2pt,
+  title=#1,
+  fonttitle=\bfseries\color{azul}
+}
+
+\title{\textbf{Laboratorio IA 7: Red neuronal pequena y evolucion por algoritmo genetico}}
+\author{Materia: Inteligencia Artificial}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{center}
+  \textbf{Dinamica:} practica en terminal\quad
+  \textbf{Entregable:} experimento, codigo, presentacion de resultados y conclusiones
+\end{center}
+
+\begin{objetivo}
+Construir una red neuronal pequena con PyTorch que controle al robot de percepcion local y evolucionar sus pesos mediante un algoritmo genetico. El mejor individuo se guardara en disco para probarlo posteriormente sobre un mapa modificado a mano.
+\end{objetivo}
+
+\section{Continuidad con las clases anteriores}
+El laboratorio conserva el mundo del robot usado en las sesiones anteriores: una cuadricula, un punto de inicio, una meta, obstaculos, sensores locales y una funcion de fitness. La progresion es:
+
+\begin{itemize}[leftmargin=*]
+  \item En las primeras clases se evoluciono una secuencia de movimientos.
+  \item Despues se incorporaron obstaculos y se compararon mutacion y cruce.
+  \item Con la percepcion local, el robot paso a consultar el entorno antes de decidir.
+  \item En este laboratorio se conserva esa politica reactiva, pero se reemplaza la tabla de reglas por una red neuronal.
+\end{itemize}
+
+\begin{idea}
+El algoritmo evolutivo sigue seleccionando comportamientos por fitness. Lo que cambia es la representacion del individuo: antes eran comandos o reglas; ahora son los pesos de una red neuronal.
+\end{idea}
+
+\section{Preparacion del entorno}
+El programa necesita Python, PyTorch y el archivo \texttt{robot\_red\_neuronal\_evolutiva.py}. Con el interprete del laboratorio se puede comprobar la instalacion:
+
+\begin{lstlisting}[style=python]
+python3 -c "import torch; print(torch.__version__)"
+\end{lstlisting}
+
+Si PyTorch no esta instalado en ese interprete:
+
+\begin{lstlisting}[style=python]
+python3 -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+\end{lstlisting}
+
+\section{Mapa y sensores}
+El mapa se modifica directamente al principio del archivo Python:
+
+\begin{lstlisting}[style=python]
+TAMANO = 8
+INICIO = (0, 0)
+META = (7, 7)
+OBSTACULOS = {
+    (0, 3), (1, 3), (2, 0), (2, 2), (2, 3),
+    (4, 5), (5, 2), (5, 3), (5, 4), (6, 6),
+}
+\end{lstlisting}
+
+En cada paso el robot consulta las celdas vecinas en orden \texttt{U D L R}. Una celda libre se representa con 0; un borde o un obstaculo, con 1. Por tanto, la entrada de la red tiene cuatro valores binarios. El robot no observa el mapa completo ni recibe directamente la posicion de la meta.
+
+\section{La red neuronal}
+La arquitectura es deliberadamente pequena:
+
+\begin{center}
+\begin{tabular}{c|c|c}
+\toprule
+Entrada & Capa oculta & Salida \\
+\midrule
+4 sensores & 8 neuronas con ReLU & 4 acciones \\
+\texttt{U,D,L,R} & combinacion no lineal & un valor por accion \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+La salida no es una accion directamente. Son cuatro valores llamados logits. La accion elegida es la que tenga el valor maximo:
+
+\begin{lstlisting}[style=python]
+logits = red(entrada)[0]
+indice = int(torch.argmax(logits).item())
+accion = COMANDOS[indice]
+\end{lstlisting}
+
+Cada individuo de la poblacion es una instancia distinta de \texttt{RedPercepcion}. Sus pesos funcionan como el material genetico.
+
+\section{Fitness y algoritmo evolutivo}
+Cada red recorre el mapa durante como maximo 30 pasos. El fitness utilizado es:
+
+\[
+F = 500 - 35d + 4p - 30c - 3r + 2000m
+\]
+
+Donde $d$ es la distancia Manhattan a la meta, $p$ los pasos utiles, $c$ los choques o movimientos bloqueados, $r$ las posiciones repetidas y $m$ vale 1 cuando se alcanza la meta y 0 en otro caso.
+
+En cada generacion:
+
+\begin{enumerate}[leftmargin=*]
+  \item Se evalua toda la poblacion.
+  \item Se ordenan los individuos por fitness.
+  \item Se conservan seis elites.
+  \item Se seleccionan padres entre los mejores individuos.
+  \item Se aplica cruce en un punto y mutacion gaussiana sobre los pesos.
+  \item Se completa la siguiente poblacion hasta llegar a 40 individuos.
+\end{enumerate}
+
+Por defecto se ejecutan 40 generaciones y la semilla es aleatoria. Se puede fijar una semilla para reproducir un experimento concreto.
+
+\section{Ejecutar el laboratorio}
+Ejecucion normal, con 40 generaciones, semilla aleatoria y animacion:
+
+\begin{lstlisting}[style=python]
+python3 robot_red_neuronal_evolutiva.py
+\end{lstlisting}
+
+Ejecucion reproducible y sin pausa entre cuadros:
+
+\begin{lstlisting}[style=python]
+python3 robot_red_neuronal_evolutiva.py \\
+  --semilla 7 --generaciones 40 --sin-pausa
+\end{lstlisting}
+
+La animacion del mejor individuo aparece despues de la evolucion. Cada cuadro muestra la observacion binaria, la accion elegida y la posicion actual.
+
+\section{Guardar y cargar el mejor individuo}
+Para entrenar y guardar la red:
+
+\begin{lstlisting}[style=python]
+python3 robot_red_neuronal_evolutiva.py \\
+  --generaciones 40 --guardar-mejor mejor_red.pt
+\end{lstlisting}
+
+El archivo \texttt{mejor\_red.pt} contiene los pesos de PyTorch y los metadatos basicos de la red. Para cargarlo sin evolucionar otra vez:
+
+\begin{lstlisting}[style=python]
+python3 robot_red_neuronal_evolutiva.py \\
+  --cargar-red mejor_red.pt
+\end{lstlisting}
+
+\begin{idea}
+Guardar la red separa dos fases del trabajo: primero se aprende una politica y despues se prueba esa misma politica bajo nuevas condiciones.
+\end{idea}
+
+\section{Probar en un mapa distinto}
+\begin{enumerate}[leftmargin=*]
+  \item Ejecuta una evolucion y guarda \texttt{mejor\_red.pt}.
+  \item Cambia manualmente \texttt{OBSTACULOS}, \texttt{INICIO} o \texttt{META} en el archivo.
+  \item Conserva el mismo \texttt{TAMANO} y evita colocar inicio o meta sobre un obstaculo.
+  \item Ejecuta con \texttt{--cargar-red mejor\_red.pt}.
+  \item Registra si la red llega, cuantos pasos usa, cuantos choques produce y si entra en un ciclo.
+\end{enumerate}
+
+Para que la comparacion sea valida, no se deben cambiar los pesos entre las dos pruebas. Solo se modifica el mapa.
+
+\begin{reto}{Preguntas para discutir}
+\begin{enumerate}[leftmargin=*]
+  \item Que se conserva entre la clase de percepcion local y este laboratorio?
+  \item Que informacion representa un peso de la red que antes representaba una regla?
+  \item Por que una red entrenada en un mapa puede fallar en otro mapa?
+  \item La politica aprendida generaliza o solo memoriza respuestas locales?
+  \item Que cambios permitirian que el robot conociera la direccion de la meta?
+\end{enumerate}
+\end{reto}
+
+\section{Experimento y tabla de resultados}
+Realiza tres entrenamientos con semillas distintas. Guarda cada mejor individuo con un nombre diferente y prueba cada uno en el mapa original y en un mapa modificado.
+
+\begin{center}
+\begin{tabular}{c|c|c|c|c|c|c}
+\toprule
+Semilla & Mapa & Llego & Generacion & Fitness & Choques & Pasos utiles \\
+\midrule
+7 & Original & & & & & \\
+7 & Modificado & & & & & \\
+21 & Original & & & & & \\
+21 & Modificado & & & & & \\
+42 & Original & & & & & \\
+42 & Modificado & & & & & \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Entrega}
+Entrega los siguientes elementos:
+
+\begin{itemize}[leftmargin=*]
+  \item \texttt{robot\_red\_neuronal\_evolutiva.py}.
+  \item Un archivo \texttt{.pt} con al menos un mejor individuo.
+  \item La tabla de resultados completa.
+  \item Una captura o descripcion de la trayectoria en el mapa original y en el modificado.
+  \item Una conclusion de 8 a 10 lineas sobre evolucion, percepcion local y generalizacion.
+\end{itemize}
+
+\section{Codigo completo}
+\lstinputlisting[style=python]{robot_red_neuronal_evolutiva.py}
+
+\end{document}

@@ -19,6 +19,19 @@ Instalación de dependencias (pip):
     # instalar paquetes necesarios
     pip install --upgrade pip
     pip install pandas numpy
+        # instalar paquetes necesarios
+        pip install --upgrade pip
+        pip install pandas numpy
+
+    Instalación de dependencias (pip) — Windows (PowerShell):
+
+        # 1) Crear y activar un virtualenv
+        python -m venv .venv
+        .\.venv\Scripts\Activate.ps1
+
+        # 2) Actualizar pip e instalar paquetes
+        pip install --upgrade pip
+        pip install pandas numpy
 
 Salida:
     Archivo CSV con `n` filas y columnas `age`,`height`.
