@@ -1,0 +1,205 @@
+\documentclass[aspectratio=169,11pt]{beamer}
+
+\usepackage[spanish,es-nodecimaldot]{babel}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{listings}
+\usepackage{hyperref}
+
+\definecolor{azul}{HTML}{174A7E}
+\definecolor{azulclaro}{HTML}{DCECF8}
+\definecolor{verde}{HTML}{2E7D32}
+\definecolor{gris}{HTML}{F3F5F7}
+\definecolor{naranja}{HTML}{A64B00}
+
+\usetheme{Madrid}
+\setbeamercolor{structure}{fg=azul}
+\setbeamercolor{frametitle}{fg=azul}
+\setbeamercolor{block title}{bg=azul,fg=white}
+\setbeamercolor{block body}{bg=azulclaro,fg=black!85}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}{\hfill\insertframenumber\hspace{0.4cm}\vspace{0.2cm}}
+
+\lstdefinestyle{codigo}{
+  language=Python,
+  basicstyle=\ttfamily\scriptsize,
+  backgroundcolor=\color{gris},
+  frame=single,
+  breaklines=true,
+  keepspaces=true,
+  showstringspaces=false,
+  columns=fullflexible,
+  keywordstyle=\color{azul}\bfseries,
+  commentstyle=\color{verde},
+  stringstyle=\color{naranja}
+}
+
+\title{Del CSV al análisis de datos}
+\subtitle{Cargar, inspeccionar y manipular una tabla con Python}
+\author{Inteligencia Artificial}
+\date{}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+\end{frame}
+
+\begin{frame}{Objetivo de la práctica}
+  Al terminar, podremos:
+  \begin{itemize}
+    \item explicar qué contiene un archivo CSV y cómo se organiza;
+    \item cargarlo con \texttt{pandas} y revisar sus filas, columnas y tipos;
+    \item detectar valores faltantes, filtrar filas y crear una columna;
+    \item resumir datos para responder una pregunta concreta.
+  \end{itemize}
+  \begin{block}{Conexión con el laboratorio del robot}
+    Guardar posición, acción, choques y distancia a la meta en un CSV permite comparar recorridos y generaciones con evidencia.
+  \end{block}
+\end{frame}
+
+\begin{frame}{CSV: una tabla en texto plano}
+  \begin{itemize}
+    \item Cada línea representa un registro (una fila).
+    \item La primera línea suele nombrar las columnas.
+    \item Un separador, normalmente coma, divide los campos.
+    \item Conviene mantener una unidad y un significado coherentes por columna.
+  \end{itemize}
+  \vspace{0.2cm}
+  \begin{block}{Ejemplo: \texttt{ventas\_sinteticas.csv}}
+    \ttfamily\scriptsize
+    fecha,ciudad,categoria,producto,unidades,precio\_unitario\\
+    2026-03-02,Valparaiso,Bebidas,Cafe,3,2.50\\
+    2026-03-03,Santiago,Alimentos,Pan,5,1.20
+  \end{block}
+  \small La coma separa columnas; el punto representa decimales en este conjunto.
+\end{frame}
+
+\begin{frame}[fragile]{Preparar la herramienta y los archivos}
+  Coloca el CSV y el script en la misma carpeta. En una terminal:
+  \begin{lstlisting}[style=codigo]
+python -m pip install pandas
+python explorar_ventas_csv.py
+  \end{lstlisting}
+  \begin{itemize}
+    \item En algunos equipos Linux, el comando puede ser \texttt{python3}.
+    \item \texttt{pandas} organiza datos tabulares en un objeto llamado \texttt{DataFrame}.
+    \item El script usa una ruta relativa a su propia ubicación, no a la carpeta actual de la terminal.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{1. Cargar el CSV}
+  \begin{lstlisting}[style=codigo]
+from pathlib import Path
+import pandas as pd
+
+ruta = Path(__file__).with_name("ventas_sinteticas.csv")
+datos = pd.read_csv(ruta, parse_dates=["fecha"])
+
+print(datos.head())
+print("Dimensiones:", datos.shape)
+  \end{lstlisting}
+  \begin{block}{Qué comprobamos}
+    \texttt{head()} muestra las primeras filas; \texttt{shape} devuelve (filas, columnas). Parsear la fecha permite tratarla como fecha y no como texto.
+  \end{block}
+\end{frame}
+
+\begin{frame}[fragile]{2. Entender la estructura y la calidad}
+  \begin{lstlisting}[style=codigo]
+print(datos.columns.tolist())
+print(datos.dtypes)
+print(datos.isna().sum())
+print(datos.select_dtypes(include="number").describe())
+  \end{lstlisting}
+  \begin{itemize}
+    \item \texttt{columns}: nombres disponibles.
+    \item \texttt{dtypes}: tipo inferido para cada columna.
+    \item \texttt{isna().sum()}: cantidad de celdas faltantes.
+    \item \texttt{select\_dtypes()} y \texttt{describe()}: seleccionan y resumen columnas numéricas.
+  \end{itemize}
+  \begin{alertblock}{No asumir}
+    Un número leído como texto, una fecha mal interpretada o un valor faltante pueden cambiar el análisis.
+  \end{alertblock}
+\end{frame}
+
+\begin{frame}[fragile]{3. Limpiar y crear una variable}
+  \begin{lstlisting}[style=codigo]
+limpios = datos.dropna(subset=["unidades", "precio_unitario"]).copy()
+limpios["importe"] = limpios["unidades"] * limpios["precio_unitario"]
+
+print("Filas originales:", len(datos))
+print("Filas utilizables:", len(limpios))
+print(limpios[["producto", "unidades", "importe"]].head())
+  \end{lstlisting}
+  \begin{block}{Decisión de análisis}
+    Aquí excluimos registros sin unidades o precio para calcular el importe. En otro problema podríamos corregirlos o conservarlos: primero hay que entender por qué faltan.
+  \end{block}
+\end{frame}
+
+\begin{frame}[fragile]{4. Filtrar, ordenar y agrupar}
+  \begin{lstlisting}[style=codigo]
+ventas_grandes = limpios[limpios["importe"] >= 10]
+print(ventas_grandes.sort_values("importe", ascending=False))
+
+por_categoria = limpios.groupby("categoria").agg(
+    ventas_totales=("importe", "sum"),
+    unidades_totales=("unidades", "sum"),
+    numero_registros=("producto", "count"),
+)
+print(por_categoria.sort_values("ventas_totales", ascending=False))
+  \end{lstlisting}
+  \begin{itemize}
+    \item Filtrar: quedarse con filas que cumplen una condición.
+    \item Ordenar: comparar registros de mayor a menor.
+    \item Agrupar: resumir por una categoría con suma, promedio o conteo.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Preguntas antes de sacar conclusiones}
+  \begin{enumerate}
+    \item ¿Qué categoría suma más ventas? ¿Y cuál reúne más unidades?
+    \item ¿Cuántas filas se descartaron y por qué?
+    \item ¿Una venta total alta significa que se vendieron muchas unidades?
+    \item ¿Qué información adicional necesitaríamos para explicar el resultado?
+  \end{enumerate}
+  \begin{alertblock}{Un resumen no es una explicación causal}
+    Una agrupación describe los datos disponibles. Por sí sola no explica por qué ocurrió el patrón ni garantiza que represente otros periodos.
+  \end{alertblock}
+\end{frame}
+
+\begin{frame}{Conseguir otros conjuntos de datos}
+  \begin{block}{Kaggle Datasets}
+    \url{https://www.kaggle.com/datasets}
+  \end{block}
+  Busca conjuntos que indiquen formato CSV y tengan una descripción y un diccionario de columnas. Algunos requieren iniciar sesión para descargarlos.
+  \begin{itemize}
+    \item Revisa la licencia y las condiciones de uso antes de reutilizar los datos.
+    \item Comprueba separador, codificación, unidades, fechas y valores faltantes.
+    \item Evita publicar datos personales o sensibles.
+  \end{itemize}
+  \vspace{0.15cm}
+  \small Alternativa: \url{https://datasetsearch.research.google.com/} para encontrar conjuntos publicados en distintos repositorios.
+\end{frame}
+
+\begin{frame}{Actividad y puente al análisis del robot}
+  \begin{enumerate}
+    \item Ejecuta \texttt{explorar\_ventas\_csv.py} y explica cada salida.
+    \item Cambia el filtro: ¿qué filas tienen más de 4 unidades?
+    \item Agrupa por ciudad y compara el importe total.
+    \item Propón columnas CSV para registrar una trayectoria del robot.
+  \end{enumerate}
+  \begin{block}{Posible registro del robot}
+    \texttt{generacion, episodio, paso, fila, columna, accion, choque, distancia\_meta, fitness}
+  \end{block}
+\end{frame}
+
+\begin{frame}{Idea para llevarse}
+  \begin{center}
+    \Large Cargar es solo el comienzo.\\[0.3cm]
+    \normalsize Inspeccionar, limpiar, transformar y preguntar convierten una tabla en evidencia útil.
+  \end{center}
+\end{frame}
+
+\end{document}

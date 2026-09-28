@@ -1,0 +1,17 @@
+fecha,ciudad,categoria,producto,unidades,precio_unitario
+2026-03-02,Valparaiso,Bebidas,Cafe,3,2.50
+2026-03-03,Santiago,Alimentos,Pan,5,1.20
+2026-03-04,Concepcion,Bebidas,Te,4,1.80
+2026-03-05,Santiago,Alimentos,Arroz,2,3.40
+2026-03-06,Valparaiso,Limpieza,Jabon,6,1.50
+2026-03-07,Concepcion,Alimentos,Pasta,3,2.10
+2026-03-08,Santiago,Bebidas,Jugo,4,2.20
+2026-03-09,Valparaiso,Alimentos,Avena,2,3.80
+2026-03-10,Concepcion,Limpieza,Detergente,1,8.90
+2026-03-11,Santiago,Bebidas,Cafe,5,2.50
+2026-03-12,Valparaiso,Limpieza,Esponja,8,0.90
+2026-03-13,Concepcion,Alimentos,Pan,4,1.20
+2026-03-14,Santiago,Limpieza,Jabon,3,1.50
+2026-03-15,Valparaiso,Bebidas,Te,2,1.80
+2026-03-16,Concepcion,Bebidas,Jugo,3,2.20
+2026-03-17,Santiago,Alimentos,Arroz,,3.40

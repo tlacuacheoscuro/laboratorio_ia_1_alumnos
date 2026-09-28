@@ -1,0 +1,206 @@
+\documentclass[aspectratio=169,11pt]{beamer}
+
+\usepackage[spanish,es-nodecimaldot]{babel}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning}
+\usepackage{xcolor}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{listings}
+
+\definecolor{azul}{HTML}{174A7E}
+\definecolor{azulclaro}{HTML}{DCECF8}
+\definecolor{verde}{HTML}{2E7D32}
+\definecolor{verdeclaro}{HTML}{E8F5E9}
+\definecolor{naranja}{HTML}{D95F02}
+\definecolor{rojo}{HTML}{B33A3A}
+\definecolor{fondo}{HTML}{F7F8FA}
+
+\usetheme{Madrid}
+\setbeamercolor{structure}{fg=azul}
+\setbeamercolor{frametitle}{fg=azul}
+\setbeamercolor{normal text}{fg=black!80}
+\setbeamercolor{block title}{bg=azul,fg=white}
+\setbeamercolor{block body}{bg=azulclaro,fg=black!80}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}{\hfill\insertframenumber\hspace{0.4cm}\vspace{0.2cm}}
+
+\title{Laboratorio 8}
+\subtitle{Redes con memoria sensorial para romper ciclos en navegacion reactiva}
+\author{Inteligencia Artificial}
+\date{}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+\end{frame}
+
+\begin{frame}{Motivacion}
+  \begin{block}{Problema del robot reactivo}
+    En el laboratorio anterior, el robot respondia a la observacion actual:
+    \[
+    a_t = \pi(s_t)
+    \]
+  \end{block}
+  \begin{alertblock}{Limitacion}
+    Si la secuencia de decisiones se repite, el robot puede quedar atrapado en un ciclo aunque la situacion local no haya cambiado.
+  \end{alertblock}
+\end{frame}
+
+\begin{frame}{Del estado instantaneo al estado temporal}
+  La idea clave es que la decision depende no solo del presente, sino tambien del pasado reciente:
+  \[
+  a_t = \pi(s_t, s_{t-1}, a_{t-1})
+  \]
+  donde:
+  \begin{itemize}
+    \item $s_t$: percepcion actual
+    \item $s_{t-1}$: percepcion anterior
+    \item $a_{t-1}$: accion ejecutada en el paso anterior
+  \end{itemize}
+  \vspace{0.3cm}
+  \begin{block}{Resultado}
+    La red ya no decide solo con el presente, sino con memoria de corto plazo.
+  \end{block}
+\end{frame}
+
+\begin{frame}{El ciclo sensorimotor}
+  \begin{center}
+    \begin{tikzpicture}[node distance=1.7cm]
+      \node[draw,rounded corners,fill=azulclaro] (entorno) {Entorno};
+      \node[draw,rounded corners,fill=verde!15,right=of entorno] (sensores) {Sensores};
+      \node[draw,rounded corners,fill=orange!20,right=of sensores] (red) {Red neuronal};
+      \node[draw,rounded corners,fill=azulclaro,right=of red] (accion) {Accion};
+      \draw[->,very thick,azul] (entorno) -- (sensores);
+      \draw[->,very thick,azul] (sensores) -- (red);
+      \draw[->,very thick,azul] (red) -- (accion);
+      \draw[->,very thick,azul] (accion) to[bend left=35] (entorno);
+    \end{tikzpicture}
+  \end{center}
+  \vspace{0.3cm}
+  \begin{block}{Idea}
+    El entorno genera sensaciones; el agente actua; la accion modifica el entorno; el ciclo se repite en $t, t+1, t+2, \dots$
+  \end{block}
+\end{frame}
+
+\begin{frame}{Que es $t-1$ y por que importa}
+  El robot necesita recordar informacion reciente:
+  \[
+  x_t = [s_t, s_{t-1}, a_{t-1}]
+  \]
+  \begin{itemize}
+    \item $s_t$ representa el presente.
+    \item $s_{t-1}$ aporta contexto temporal.
+    \item $a_{t-1}$ informa que la red ya eligio antes.
+  \end{itemize}
+  \vspace{0.2cm}
+  \begin{alertblock}{Consecuencia}
+    La politica puede detectar secuencias repetitivas y evitar caer en ciclos locales.
+  \end{alertblock}
+\end{frame}
+
+\begin{frame}{Red con memoria sensorial}
+  \begin{block}{Arquitectura}
+    \begin{center}
+      12 entradas $\longrightarrow$ 16 neuronas ReLU $\longrightarrow$ 4 acciones
+    \end{center}
+  \end{block}
+  \begin{itemize}
+    \item \textbf{Entradas:} sensores actuales, sensores anteriores y accion previa.
+    \item \textbf{Capa oculta:} combina la informacion para aprender patrones locales.
+    \item \textbf{Salidas:} un valor por cada accion $\{U,D,L,R\}$.
+    \item \textbf{Decision:} se elige la salida con mayor valor mediante $\arg\max$.
+  \end{itemize}
+  \begin{alertblock}{Interpretacion}
+    La red usa el presente y el paso anterior para decidir hacia donde moverse.
+  \end{alertblock}
+\end{frame}
+
+\begin{frame}{Formulacion matematica}
+  La red calcula:
+  \[
+  h_t = \mathrm{ReLU}(W_1 x_t + b_1)
+  \]
+  \[
+  y_t = W_2 h_t + b_2
+  \]
+  \[
+  a_t = \arg\max(y_t)
+  \]
+  con:
+  \[
+  x_t = [s_t, s_{t-1}, a_{t-1}]
+  \]
+  \vspace{0.3cm}
+  La accion elegida es la de mayor valor logit. La red compara todas las opciones con el estado presente y reciente.
+\end{frame}
+
+\begin{frame}{Por que ayuda a romper bucles}
+  Un bucle aparece cuando la secuencia:
+  \[
+  s_t, a_t, s_{t+1}, a_{t+1}, \dots
+  \]
+  vuelve a un estado similar ya observado.
+  \begin{block}{Con memoria}
+    El agente puede reconocer que:
+    \begin{itemize}
+      \item la observacion actual es parecida a la anterior,
+      \item la accion anterior fue la misma,
+      \item la secuencia se vuelve circular.
+    \end{itemize}
+  \end{block}
+\end{frame}
+
+\begin{frame}{Como se evalua}
+  La estrategia sigue siendo evolutiva:
+  \begin{enumerate}
+    \item generar 40 individuos,
+    \item evaluar fitness,
+    \item conservar elites,
+    \item cruzar y mutar,
+    \item seleccionar la mejor red.
+  \end{enumerate}
+  \vspace{0.2cm}
+  \begin{block}{Fitness}
+    \[
+    F = 500 - 35d + 4p - 30c - 3r + 2000m - 10b
+    \]
+    donde $b$ es una penalizacion por bucles.
+  \end{block}
+\end{frame}
+
+\begin{frame}{Hipotesis de trabajo}
+  \begin{block}{Hipotesis}
+    Una red con entrada de memoria sensorial y accion previa reducira la frecuencia de ciclos y mejorara la capacidad de navegacion local en entornos con obstaculos.
+  \end{block}
+  \vspace{0.25cm}
+  \begin{center}
+    \textbf{Objetivo experimental: comparar la red basica contra la red con memoria.}
+  \end{center}
+\end{frame}
+
+\begin{frame}{Experimentos sugeridos}
+  \begin{itemize}
+    \item Red basica: 4 sensores actuales.
+    \item Red con memoria: 4 actuales + 4 previos + accion previa.
+    \item Mapa sencillo, mapa con pasillos estrechos y mapa con bucles locales.
+  \end{itemize}
+  \vspace{0.3cm}
+  \begin{block}{Metricas}
+    exito, choques, pasos, ciclos, distancia final.
+  \end{block}
+\end{frame}
+
+\begin{frame}{Conclusiones}
+  \begin{itemize}
+    \item La memoria sensorial hace que la decision sea menos reactiva pura.
+    \item El robot valora no solo lo que ve, sino lo que ya hizo.
+    \item La red aprende una politica con dependencia temporal.
+    \item Esto es una forma simple de inteligencia sensoriomotora.
+  \end{itemize}
+\end{frame}
+
+\end{document}

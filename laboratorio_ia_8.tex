@@ -1,0 +1,304 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-nodecimaldot]{babel}
+\usepackage[a4paper,margin=2.2cm]{geometry}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{tcolorbox}
+\usepackage{amsmath}
+\usepackage{parskip}
+
+\definecolor{azul}{HTML}{174A7E}
+\definecolor{azulclaro}{HTML}{EAF3FA}
+\definecolor{verdeclaro}{HTML}{EEF7EE}
+\definecolor{grisfondo}{HTML}{F5F6F7}
+\definecolor{verde}{HTML}{2E7D32}
+\definecolor{naranja}{HTML}{A64B00}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=azul,
+  urlcolor=azul,
+  pdftitle={Laboratorio IA 8: Redes con memoria sensorial}
+}
+
+\lstdefinestyle{python}{
+  language=Python,
+  basicstyle=\ttfamily\footnotesize,
+  backgroundcolor=\color{grisfondo},
+  frame=single,
+  rulecolor=\color{black!20},
+  keepspaces=true,
+  showstringspaces=false,
+  breaklines=true,
+  columns=fullflexible,
+  keywordstyle=\color{azul}\bfseries,
+  commentstyle=\color{verde},
+  stringstyle=\color{naranja}
+}
+
+\newtcolorbox{objetivo}{
+  colback=azulclaro,
+  colframe=azul,
+  boxrule=0.8pt,
+  arc=2pt,
+  title=Objetivo de la sesion,
+  fonttitle=\bfseries\color{azul}
+}
+
+\newtcolorbox{idea}{
+  colback=verdeclaro,
+  colframe=verde,
+  boxrule=0.8pt,
+  arc=2pt,
+  title=Idea clave,
+  fonttitle=\bfseries\color{verde}
+}
+
+\title{\textbf{Laboratorio IA 8: Redes con memoria sensorial para romper ciclos en navegacion reactiva}}
+\author{Materia: Inteligencia Artificial}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{center}
+  \textbf{Dinamica:} practica en terminal \quad
+  \textbf{Entregable:} codigo, resultados, analisis y conclusion
+\end{center}
+
+\begin{objetivo}
+Extender la base de la red neuronal evolutiva para que el robot recuerde su estado reciente y reduzca la probabilidad de quedar atrapado en ciclos. La tarea consiste en revisar la estructura de los laboratorios previos y modificar la implementacion entregada, manteniendo la misma logica general del robot, el fitness y la evolucion genetica.
+\end{objetivo}
+
+\section{Continuidad con las clases anteriores}
+El laboratorio conserva el mundo del robot usado en las sesiones anteriores: una cuadricula, un punto de inicio, una meta, obstaculos, sensores locales y una funcion de fitness. La progresion es:
+
+\begin{itemize}[leftmargin=*]
+  \item En las primeras clases se evoluciono una secuencia de movimientos.
+  \item Despues se incorporaron obstaculos y se compararon mutacion y cruce.
+  \item Con la percepcion local, el robot paso a consultar el entorno antes de decidir.
+  \item En el laboratorio 7 se reemplazo la tabla de reglas por una red neuronal.
+  \item En este laboratorio se conserva esa base, pero se agrega memoria temporal para que el robot recuerde su estado anterior y la ultima accion.
+\end{itemize}
+
+\begin{idea}
+La evolucion sigue seleccionando comportamientos por fitness. Lo que cambia es la representacion del estado de entrada: antes la red solo observaba el presente; ahora ademas incorpora lo visto y hecho en el instante anterior.
+\end{idea}
+
+La idea original del laboratorio anterior era:
+\[
+ a_t = \pi(s_t)
+\]
+
+donde $s_t$ representa una descripcion local del entorno en el instante $t$.
+
+Eso ya funcionaba como una politica reactiva, pero tenia un problema: el robot no recordaba lo que habia visto un paso antes ni lo que habia decidido antes. Asin, podia entrar en secuencias repetitivas que parecian razonables localmente pero que no avanzaban al objetivo.
+
+\begin{idea}
+No se trata de reescribir el robot desde cero. La tarea es identificar que parte del codigo anterior se conserva y que parte debe cambiar para incluir memoria temporal y evitar ciclos.
+\end{idea}
+
+\section{El ciclo sensorimotor}
+El comportamiento de un agente artificial puede describirse como un ciclo:
+
+\[
+\text{entorno} \rightarrow \text{sensores} \rightarrow \text{red} \rightarrow \text{accion} \rightarrow \text{entorno}
+\]
+
+Este ciclo se repite para cada instante $t, t+1, t+2, \dots$.
+
+En este contexto, se habla de ciclo sensorimotor: una secuencia de percepcion, accion, percepcion, accion. Cuando la observacion vuelve a un estado similar y la accion anterior reaparece, el agente puede quedar atrapado en un bucle.
+
+\section{Estado sensorial anterior y accion previa}
+La red del laboratorio anterior recibia solo:
+
+\[
+ s_t = [U_t, D_t, L_t, R_t]
+\]
+
+Ahora, la entrada se amplia con la informacion que ya existe en el flujo del robot: la observacion del paso anterior y la accion que se ejecuto antes. Es decir, la politica pasa a depender de:
+
+\[
+ a_t = \pi(s_t, s_{t-1}, a_{t-1})
+\]
+
+donde $s_t$ es la percepcion actual, $s_{t-1}$ la percepcion anterior y $a_{t-1}$ la ultima accion ejecutada.
+
+La entrada total queda formada por 12 valores:
+
+\begin{itemize}[leftmargin=*]
+  \item 4 sensores actuales,
+  \item 4 sensores anteriores,
+  \item 4 bits de la accion previa (codificacion one-hot).
+\end{itemize}
+
+Esto funciona como una ventana temporal de corto alcance. El robot ya no decide solo con el presente, sino con una memoria reciente del estado.
+
+\section{La red neuronal}
+La arquitectura sigue siendo sencilla pero ahora con entrada ampliada:
+
+\begin{center}
+\begin{tabular}{c|c|c}
+\toprule
+Entrada & Capa oculta & Salida \\
+\midrule
+12 valores temporales & 16 neuronas con ReLU & 4 acciones \\
+$[s_t, s_{t-1}, a_{t-1}]$ & combinacion no lineal & un valor por accion \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+La salida no es una accion directamente. Son cuatro valores llamados logits. La accion elegida es la que tenga el valor maximo:
+
+\begin{lstlisting}[style=python]
+logits = red(entrada)[0]
+indice = int(torch.argmax(logits).item())
+action = COMANDOS[indice]
+\end{lstlisting}
+
+Cada individuo de la poblacion sigue siendo una instancia distinta de la clase de red, pero ahora el vector de entrada incluye memoria sensorial. Sus pesos siguen funcionando como material genetico.
+
+\[
+ s_{t-1} = [U_{t-1}, D_{t-1}, L_{t-1}, R_{t-1}]
+\]
+\[
+ a_{t-1}
+\]
+
+Es decir, la politica se vuelve:
+
+\[
+ a_t = \pi(s_t, s_{t-1}, a_{t-1})
+\]
+
+Esto significa que la red no decide solo con la situacion presente, sino con un estado reciente y con la historia inmediata de sus decisiones.
+
+\section{Fitness y algoritmo evolutivo}
+Cada red recorre el mapa durante como maximo 30 pasos. El fitness puede mantenerse similar al laboratorio anterior y, si se desea, incluir una penalizacion extra por ciclos o repeticiones. La idea es conservar la estructura del problema y solo ajustar la politica y la evaluacion:
+
+\[
+F = 500 - 35d + 4p - 30c - 3r + 2000m - 10b
+\]
+
+Donde $d$ es la distancia Manhattan a la meta, $p$ los pasos utiles, $c$ los choques, $r$ las posiciones repetidas, $m$ vale 1 cuando se alcanza la meta y $b$ penaliza la aparicion de bucles. En cada generacion:
+
+\begin{enumerate}[leftmargin=*]
+  \item Se evalua toda la poblacion.
+  \item Se ordenan los individuos por fitness.
+  \item Se conservan seis elites.
+  \item Se seleccionan padres entre los mejores individuos.
+  \item Se aplica cruce en un punto y mutacion gaussiana sobre los pesos.
+  \item Se completa la siguiente poblacion hasta llegar a 40 individuos.
+\end{enumerate}
+
+Por defecto se ejecutan 40 generaciones y la semilla es aleatoria. Se puede fijar una semilla para reproducir un experimento concreto.
+
+\section{Ejecutar el laboratorio}
+Ejecucion normal, con 40 generaciones, semilla aleatoria y animacion:
+
+\begin{lstlisting}[style=python]
+python3 robot_red_neuronal_memoria.py
+\end{lstlisting}
+
+Ejecucion reproducible y sin pausa entre cuadros:
+
+\begin{lstlisting}[style=python]
+python3 robot_red_neuronal_memoria.py \\
+  --semilla 7 --generaciones 40 --sin-pausa
+\end{lstlisting}
+
+La animacion del mejor individuo aparece despues de la evolucion. Cada cuadro muestra la observacion binaria, la accion elegida y la posicion actual.
+
+\section{Guardar y cargar el mejor individuo}
+Para entrenar y guardar la red:
+
+\begin{lstlisting}[style=python]
+python3 robot_red_neuronal_memoria.py \\
+  --generaciones 40 --guardar-mejor mejor_red.pt
+\end{lstlisting}
+
+El archivo \texttt{mejor\_red.pt} contiene los pesos de PyTorch y los metadatos basicos de la red. Para cargarlo sin evolucionar otra vez:
+
+\begin{lstlisting}[style=python]
+python3 robot_red_neuronal_memoria.py \\
+  --cargar-red mejor_red.pt
+\end{lstlisting}
+
+\begin{idea}
+Guardar la red separa dos fases del trabajo: primero se aprende una politica y despues se prueba esa misma politica bajo nuevas condiciones.
+\end{idea}
+
+\section{Probar en un mapa distinto}
+\begin{enumerate}[leftmargin=*]
+  \item Ejecuta una evolucion y guarda \texttt{mejor\_red.pt}.
+  \item Cambia manualmente \texttt{OBSTACULOS}, \texttt{INICIO} o \texttt{META} en el archivo.
+  \item Conserva el mismo \texttt{TAMANO} y evita colocar inicio o meta sobre un obstaculo.
+  \item Ejecuta con \texttt{--cargar-red mejor\_red.pt}.
+  \item Registra si la red llega, cuantos pasos usa, cuantos choques produce y si entra en un ciclo.
+\end{enumerate}
+
+Para que la comparacion sea valida, no se deben cambiar los pesos entre las dos pruebas. Solo se modifica el mapa.
+
+\section{Objetivo experimental}
+En este laboratorio se propone responder preguntas como:
+
+\begin{itemize}[leftmargin=*]
+  \item ¿La memoria sensorial reduce la cantidad de ciclos?
+  \item ¿La red aprende a escapar de patrones repetitivos?
+  \item ¿La red con memoria llega a la meta en mapas mas complejos?
+  \item ¿Que pasa si el fitness penaliza la repeticion de posiciones y secuencias?
+\end{itemize}
+
+\section{Conclusiones}
+La clave pedagogica de este laboratorio es que la inteligencia no surge solo de ver el entorno, sino tambien de recordar lo que se vio y lo que se hizo. La modificacion principal no es redefinir completamente el problema, sino extender la representacion del estado para que el robot tenga memoria temporal. De ese modo se conserva la estructura de los laboratorios previos y se introduce una mejora concreta para reducir ciclos sensoriomotores.
+
+\section{Diseño del ejercicio}
+La idea es que ustedes trabajen sobre la base ya entregada y realicen cambios puntuales, sin reconstruir todo el proyecto desde cero. Se sugiere:
+\begin{enumerate}[leftmargin=*]
+  \item Revisar el codigo de los laboratorios previos y la base del laboratorio 8 entregada para identificar donde se define la observacion de la red y como se toma la accion.
+  \item Modificar la entrada de la red para incluir $s_{t-1}$ y $a_{t-1}$.
+  \item Mantener el algoritmo genetico y la funcion de fitness, ajustando solo lo necesario para penalizar bucles.
+  \item Entrenar una poblacion de redes con memoria sensorial.
+  \item Guardar la mejor red.
+  \item Cambiar el mapa o la posicion inicial.
+  \item Probar la misma red sin volver a evolucionar.
+  \item Comparar exito, choques, pasos y ciclos.
+\end{enumerate}
+
+\section{Metrica principal}
+Se puede mantener el fitness anterior y agregar una penalizacion por bucles:
+
+\[
+F = 500 - 35d + 4p - 30c - 3r + 2000m - 10b
+\]
+
+donde:
+- $d$ es la distancia a la meta,
+- $p$ son pasos utiles,
+- $c$ choques,
+- $r$ repeticion de posiciones,
+- $m$ indica si se alcanzo la meta,
+- $b$ penaliza bucles sensorimotores.
+
+\section{Entrega esperada}
+Cada grupo debe entregar:
+
+\begin{itemize}[leftmargin=*]
+  \item una version modificada del codigo base de laboratorio anterior,
+  \item comentarios claros sobre que partes se conservaron y que partes se cambiaron,
+  \item scripts de entrenamiento y evaluacion,
+  \item tabla de resultados,
+  \item analisis de los ciclos,
+  \item conclusion sobre la importancia de la memoria temporal.
+\end{itemize}
+
+\section{Conclusiones}
+La clave pedagogica de este laboratorio es que la inteligencia no surge solo de ver el entorno, sino tambien de recordar lo que se vio y lo que se hizo. La tarea no es partir de cero, sino usar la base ya aprendida en los laboratorios anteriores, reconocer el punto de extension y modificar la politica para incorporar memoria temporal. Eso permite que el robot reaccione mejor a secuencias repetitivas y a la aparicion de bucles.
+
+\end{document}
