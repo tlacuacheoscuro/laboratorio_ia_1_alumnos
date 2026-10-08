@@ -19,7 +19,7 @@ CÓMO ADAPTAR A OTRO ARCHIVO:
   3. Cambia COLUMNA_OBJETIVO a la columna que quieres predecir
 
 REQUISITOS:
-  pip install torch pandas scikit-learn
+  pip install torch pandas scikit-learn matplotlib
 ================================================================================
 """
 
@@ -67,6 +67,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_absolute_error, r2_score
 
 import numpy as np  # Para operaciones numéricas básicas
+from pathlib import Path
 
 
 # ==============================================================================
@@ -74,7 +75,9 @@ import numpy as np  # Para operaciones numéricas básicas
 # (modifica aquí para usar otro archivo o columnas)
 # ==============================================================================
 
-ARCHIVO_CSV = "Fooddemand.csv"
+CARPETA_SCRIPT = Path(__file__).resolve().parent
+ARCHIVO_CSV = CARPETA_SCRIPT / "Fooddemand.csv"
+ARCHIVO_HISTORIAL = CARPETA_SCRIPT / "historial_entrenamiento.csv"
 
 # ¿POR QUÉ estas columnas de entrada?
 #   - checkout_price y base_price: el precio afecta directamente la demanda
@@ -105,7 +108,7 @@ EPOCAS = 100
 #   0.1 → pasos grandes, aprende rápido pero puede "saltar" la solución óptima.
 #   0.0001 → pasos pequeños, muy lento pero estable.
 #   0.001 es el valor por defecto recomendado para el optimizador Adam.
-TASA_APRENDIZAJE = 0.001
+TASA_APRENDIZAJE = 0.1
 
 # ¿POR QUÉ lotes de 64?
 #   Lote de 1 → muy lento, mucho ruido en el aprendizaje.
@@ -117,6 +120,10 @@ TAMANO_LOTE = 64
 #   Es la división más común en machine learning.
 #   Con 2000 filas: ~1600 para entrenar y ~400 para evaluar. Es suficiente.
 PORCENTAJE_PRUEBA = 0.2
+
+# La validación permite observar el aprendizaje; el test queda reservado
+# para la evaluación final del modelo.
+PORCENTAJE_VALIDACION = 0.2
 
 
 # ==============================================================================
@@ -143,8 +150,15 @@ y = datos[COLUMNA_OBJETIVO].values
 
 # random_state=42: número semilla para el generador aleatorio.
 # Garantiza que la división sea siempre la misma, haciendo el experimento reproducible.
-X_entren, X_prueba, y_entren, y_prueba = train_test_split(
+X_entrenamiento_validacion, X_prueba, y_entrenamiento_validacion, y_prueba = train_test_split(
     X, y, test_size=PORCENTAJE_PRUEBA, random_state=42
+)
+
+X_entren, X_validacion, y_entren, y_validacion = train_test_split(
+  X_entrenamiento_validacion,
+  y_entrenamiento_validacion,
+  test_size=PORCENTAJE_VALIDACION,
+  random_state=42
 )
 
 # ¿POR QUÉ fit_transform solo en entrenamiento y transform en prueba?
@@ -155,9 +169,11 @@ X_entren, X_prueba, y_entren, y_prueba = train_test_split(
 #   del futuro al modelo (data leakage), lo cual hace la evaluación engañosa.
 escalador = StandardScaler()
 X_entren = escalador.fit_transform(X_entren)
+X_validacion = escalador.transform(X_validacion)
 X_prueba  = escalador.transform(X_prueba)
 
 print(f"  Datos de entrenamiento: {len(X_entren)} filas")
+print(f"  Datos de validación:    {len(X_validacion)} filas")
 print(f"  Datos de prueba:        {len(X_prueba)} filas")
 print()
 
@@ -181,6 +197,8 @@ y_entren_tensor = torch.tensor(y_entren, dtype=torch.float32).unsqueeze(1)
 
 X_prueba_tensor  = torch.tensor(X_prueba,  dtype=torch.float32)
 y_prueba_tensor  = torch.tensor(y_prueba,  dtype=torch.float32).unsqueeze(1)
+X_validacion_tensor = torch.tensor(X_validacion, dtype=torch.float32)
+y_validacion_tensor = torch.tensor(y_validacion, dtype=torch.float32).unsqueeze(1)
 
 # ¿POR QUÉ shuffle=True en el DataLoader?
 #   Si los datos están ordenados (por semana, por centro), la red podría aprender
@@ -293,6 +311,8 @@ print("=" * 60)
 print("  ENTRENANDO LA RED...")
 print("=" * 60)
 
+historial_entrenamiento = []
+
 for epoca in range(EPOCAS):
 
     # ¿POR QUÉ red.train()?
@@ -334,11 +354,33 @@ for epoca in range(EPOCAS):
         #   Así la red "aprende" de sus errores.
         optimizador.step()
 
-        perdida_total += perdida.item()  # .item() saca el número Python del tensor
+        # Ponderamos por el número de filas: el último lote puede ser más pequeño.
+        perdida_total += perdida.item() * len(X_lote)
+
+    perdida_entrenamiento = perdida_total / len(X_entren_tensor)
+
+    # La validación mide generalización; no calcula gradientes ni cambia los pesos.
+    red.eval()
+    with torch.no_grad():
+        prediccion_validacion = red(X_validacion_tensor)
+        perdida_validacion = perdida_fn(prediccion_validacion, y_validacion_tensor).item()
+
+    historial_entrenamiento.append({
+        "epoca": epoca + 1,
+        "train_mse": perdida_entrenamiento,
+        "validation_mse": perdida_validacion,
+        "learning_rate": optimizador.param_groups[0]["lr"]
+    })
 
     if (epoca + 1) % 10 == 0:
-        perdida_promedio = perdida_total / len(cargador_entren)
-        print(f"  Época [{epoca + 1:3d}/{EPOCAS}]  |  Pérdida MSE: {perdida_promedio:,.0f}")
+        print(
+            f"  Época [{epoca + 1:3d}/{EPOCAS}]  |  "
+            f"MSE entrenamiento: {perdida_entrenamiento:,.0f}  |  "
+            f"MSE validación: {perdida_validacion:,.0f}"
+        )
+
+pd.DataFrame(historial_entrenamiento).to_csv(ARCHIVO_HISTORIAL, index=False)
+print(f"  Historial de aprendizaje guardado en: {ARCHIVO_HISTORIAL}")
 
 print()
 
@@ -386,7 +428,7 @@ print("=" * 60)
 print(f"  {'#':<4} {'Real':>10} {'Predicción':>12} {'Error':>10}")
 print(f"  {'-'*40}")
 
-for i in range(10):
+for i in range(30):
     real  = int(reales[i][0])
     pred  = int(predicciones[i][0])
     error = abs(real - pred)
