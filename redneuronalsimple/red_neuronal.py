@@ -67,6 +67,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_absolute_error, r2_score
 
 import numpy as np  # Para operaciones numéricas básicas
+import matplotlib.pyplot as plt
 from pathlib import Path
 
 
@@ -78,6 +79,10 @@ from pathlib import Path
 CARPETA_SCRIPT = Path(__file__).resolve().parent
 ARCHIVO_CSV = CARPETA_SCRIPT / "Fooddemand.csv"
 ARCHIVO_HISTORIAL = CARPETA_SCRIPT / "historial_entrenamiento.csv"
+ARCHIVO_MEJOR_MODELO = CARPETA_SCRIPT / "mejor_modelo.pth"
+ARCHIVO_GRAFICA_PREDICCIONES = CARPETA_SCRIPT / "predicciones_vs_reales.png"
+ARCHIVO_GRAFICA_PREDICCIONES_PDF = CARPETA_SCRIPT / "predicciones_vs_reales.pdf"
+ARCHIVO_PREDICCIONES_CSV = CARPETA_SCRIPT / "predicciones_prueba.csv"
 
 # ¿POR QUÉ estas columnas de entrada?
 #   - checkout_price y base_price: el precio afecta directamente la demanda
@@ -91,23 +96,20 @@ COLUMNAS_ENTRADA = [
     "emailer_for_promotion",
     "homepage_featured",
     "week",
-
 ]
 
 COLUMNA_OBJETIVO = "num_orders"  # Lo que queremos predecir
 
 # ¿POR QUÉ 100 épocas?
 #   Una época = la red ve TODOS los datos una vez.
-#   Pocas épocas → la red no aprende suficiente (underfitting).
-#   Demasiadas épocas → puede memorizar los datos (overfitting).
-#   100 es un buen punto de partida para datasets medianos.
+#   Con Early Stopping podemos fijar un número generoso (100) sin temor a
+#   sobreajustar, porque el entrenamiento se detendrá automáticamente si no avanza.
 EPOCAS = 100
 
-# ¿POR QUÉ tasa de aprendizaje 0.001?
+# ¿POR QUÉ tasa de aprendizaje 0.1?
 #   Controla qué tan grandes son los pasos al ajustar los pesos.
-#   0.1 → pasos grandes, aprende rápido pero puede "saltar" la solución óptima.
-#   0.0001 → pasos pequeños, muy lento pero estable.
-#   0.001 es el valor por defecto recomendado para el optimizador Adam.
+#   0.1 permite explorar rápidamente el espacio, aunque un valor menor (ej. 0.001)
+#   suele ser más estable si el gradiente oscila.
 TASA_APRENDIZAJE = 0.1
 
 # ¿POR QUÉ lotes de 64?
@@ -116,14 +118,31 @@ TASA_APRENDIZAJE = 0.1
 #   64 es un valor clásico: buen balance entre velocidad y estabilidad.
 TAMANO_LOTE = 64
 
-# ¿POR QUÉ 20% para prueba?
-#   Es la división más común en machine learning.
-#   Con 2000 filas: ~1600 para entrenar y ~400 para evaluar. Es suficiente.
+# ¿POR QUÉ 20% para prueba y 20% para validación?
+#   Es la división clásica train/val/test (64% / 16% / 20%).
+#   La validación guía la parada temprana; la prueba queda intocada hasta el final.
 PORCENTAJE_PRUEBA = 0.2
-
-# La validación permite observar el aprendizaje; el test queda reservado
-# para la evaluación final del modelo.
 PORCENTAJE_VALIDACION = 0.2
+
+# ==============================================================================
+# CONFIGURACIÓN DE EARLY STOPPING (PARADA TEMPRANA)
+# ==============================================================================
+# ¿POR QUÉ Early Stopping?
+#   Entrenar durante un número ciego de épocas tiene un alto riesgo de sobreajuste
+#   (overfitting): la red sigue reduciendo la pérdida en entrenamiento pero empeora
+#   en datos nuevos. Early Stopping monitorea la pérdida de validación y frena
+#   el bucle cuando ya no hay mejoras, ahorrando cómputo y evitando memorización.
+USAR_EARLY_STOPPING = True
+
+# ¿POR QUÉ PACIENCIA = 15?
+#   El gradiente estocástico tiene ruido natural. 15 épocas ofrece un colchón
+#   para no parar prematuramente ante una subida pasajera de validación.
+PACIENCIA = 15
+
+# ¿POR QUÉ DELTA_MINIMO = 0.0?
+#   Es la reducción mínima de error para considerar que hubo una mejora real.
+#   0.0 cuenta cualquier descenso en el MSE de validación como nuevo récord.
+DELTA_MINIMO = 0.0
 
 
 # ==============================================================================
@@ -308,10 +327,14 @@ optimizador = torch.optim.Adam(red.parameters(), lr=TASA_APRENDIZAJE)
 # ==============================================================================
 
 print("=" * 60)
-print("  ENTRENANDO LA RED...")
+print("  ENTRENANDO LA RED CON EARLY STOPPING...")
 print("=" * 60)
 
 historial_entrenamiento = []
+mejor_perdida_val = float("inf")
+mejor_epoca = 0
+epocas_sin_mejora = 0
+detencion_temprana = False
 
 for epoca in range(EPOCAS):
 
@@ -372,25 +395,67 @@ for epoca in range(EPOCAS):
         "learning_rate": optimizador.param_groups[0]["lr"]
     })
 
-    if (epoca + 1) % 10 == 0:
+    # ==========================================================================
+    # CHECKPOINTING: GUARDAR EL MEJOR MODELO
+    # ==========================================================================
+    # ¿POR QUÉ guardar solo cuando baja la pérdida de validación?
+    #   El estado de la red al final del bucle no es necesariamente el mejor.
+    #   Si guardamos el 'state_dict' cada vez que superamos el récord de
+    #   validación, garantizamos que el modelo retenido tiene la máxima
+    #   capacidad de generalización.
+    if perdida_validacion < (mejor_perdida_val - DELTA_MINIMO):
+        mejor_perdida_val = perdida_validacion
+        mejor_epoca = epoca + 1
+        epocas_sin_mejora = 0
+        torch.save(red.state_dict(), ARCHIVO_MEJOR_MODELO)
+        es_record = True
+    else:
+        epocas_sin_mejora += 1
+        es_record = False
+
+    if (epoca + 1) % 10 == 0 or es_record:
+        marca = " ⭐ [Nuevo récord guardado]" if es_record else ""
         print(
             f"  Época [{epoca + 1:3d}/{EPOCAS}]  |  "
             f"MSE entrenamiento: {perdida_entrenamiento:,.0f}  |  "
-            f"MSE validación: {perdida_validacion:,.0f}"
+            f"MSE validación: {perdida_validacion:,.0f}{marca}"
         )
+
+    # ==========================================================================
+    # CRITERIO DE EARLY STOPPING (PARADA TEMPRANA)
+    # ==========================================================================
+    # ¿POR QUÉ parar el bucle?
+    #   Si han pasado PACIENCIA épocas consecutivas sin que la validación mejore,
+    #   el modelo probablemente ya convergió o está comenzando a sobreajustar.
+    if USAR_EARLY_STOPPING and epocas_sin_mejora >= PACIENCIA:
+        print("\n" + "=" * 60)
+        print(f"  🛑 PARADA TEMPRANA (EARLY STOPPING) EN ÉPOCA {epoca + 1}")
+        print(f"  → La pérdida de validación no mejoró durante {PACIENCIA} épocas consecutivas.")
+        print(f"  → El mejor modelo se registró en la época {mejor_epoca} con MSE: {mejor_perdida_val:,.0f}")
+        print("=" * 60)
+        detencion_temprana = True
+        break
 
 pd.DataFrame(historial_entrenamiento).to_csv(ARCHIVO_HISTORIAL, index=False)
 print(f"  Historial de aprendizaje guardado en: {ARCHIVO_HISTORIAL}")
-
 print()
 
 
 # ==============================================================================
-# SECCIÓN 7: EVALUACIÓN
+# SECCIÓN 7: RESTAURACIÓN Y EVALUACIÓN FINAL DEL MEJOR MODELO
 # ==============================================================================
 
+# ¿POR QUÉ restaurar los mejores pesos antes de evaluar?
+#   Si el entrenamiento se detuvo tras 15 épocas sin mejora (o al llegar a 100),
+#   la red actual en memoria tiene pesos degradados respecto al pico óptimo.
+#   Cargar el archivo .pth nos asegura evaluar exactamente el punto más alto de rendimiento.
+if ARCHIVO_MEJOR_MODELO.is_file():
+    print(f"  Cargando los pesos óptimos de la época {mejor_epoca} desde: {ARCHIVO_MEJOR_MODELO.name}")
+    red.load_state_dict(torch.load(ARCHIVO_MEJOR_MODELO))
+    print("  ✓ Pesos óptimos cargados correctamente.")
+
 print("=" * 60)
-print("  EVALUANDO EL MODELO EN DATOS NO VISTOS...")
+print("  EVALUANDO EL MODELO EN DATOS DE PRUEBA (NO VISTOS)...")
 print("=" * 60)
 
 # ¿POR QUÉ red.eval() y torch.no_grad()?
@@ -404,9 +469,11 @@ with torch.no_grad():
 
 mae = mean_absolute_error(reales, predicciones)
 r2  = r2_score(reales, predicciones)
+rmse = float(np.sqrt(np.mean((reales - predicciones) ** 2)))
 
 print(f"  Error Absoluto Medio (MAE): {mae:.1f} pedidos")
 print(f"  → La red se equivoca ±{mae:.0f} pedidos en promedio")
+print(f"  Raíz del Error Cuadrático Medio (RMSE): {rmse:.1f} pedidos")
 print()
 print(f"  R² (coeficiente de determinación): {r2:.3f}")
 if r2 > 0.7:
@@ -414,7 +481,7 @@ if r2 > 0.7:
 elif r2 > 0.4:
     print(f"  → Modelo moderado: explica el {r2*100:.0f}% de la variación")
 else:
-    print(f"  → Modelo débil: solo explica el {r2*100:.0f}%. Prueba más épocas o más columnas.")
+    print(f"  → Modelo débil: solo explica el {r2*100:.0f}%. Prueba ajustar hiperparámetros.")
 print()
 
 
@@ -428,16 +495,98 @@ print("=" * 60)
 print(f"  {'#':<4} {'Real':>10} {'Predicción':>12} {'Error':>10}")
 print(f"  {'-'*40}")
 
-for i in range(30):
+for i in range(min(30, len(reales))):
     real  = int(reales[i][0])
     pred  = int(predicciones[i][0])
     error = abs(real - pred)
     print(f"  {i+1:<4} {real:>10} {pred:>12} {error:>10}")
 
 print()
+
+
+# ==============================================================================
+# SECCIÓN 9: DIAGNÓSTICO VISUAL (PREDICCIONES VS REALES Y RESIDUOS)
+# ==============================================================================
+
 print("=" * 60)
-print("  LISTO. Para usar otro CSV:")
-print("  1. ARCHIVO_CSV       = 'tu_archivo.csv'")
-print("  2. COLUMNAS_ENTRADA  = ['col1', 'col2', ...]")
-print("  3. COLUMNA_OBJETIVO  = 'columna_a_predecir'")
+print("  GENERANDO GRÁFICA DE DIAGNÓSTICO DE PREDICCIONES...")
+print("=" * 60)
+
+reales_planos = reales.flatten()
+predicciones_planas = predicciones.flatten()
+residuos = reales_planos - predicciones_planas
+
+# Guardar predicciones en CSV para análisis posterior
+df_predicciones = pd.DataFrame({
+    "real": reales_planos,
+    "prediccion": predicciones_planas,
+    "error_absoluto": np.abs(residuos),
+    "residuo": residuos
+})
+df_predicciones.to_csv(ARCHIVO_PREDICCIONES_CSV, index=False)
+print(f"  Predicciones guardadas en: {ARCHIVO_PREDICCIONES_CSV}")
+
+# ¿POR QUÉ esta gráfica doble?
+#   1. Predicciones vs Reales: compara las predicciones con la diagonal ideal y = x.
+#   2. Análisis de Residuos: revela si la red tiene sesgos sistemáticos (ej: subestimar picos).
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13, 5.5))
+
+# --- PANEL 1: Predicciones vs Reales ---
+ax1.scatter(
+    reales_planos, predicciones_planas,
+    alpha=0.55, color="#134074", edgecolors="none", s=38, label="Muestras de prueba"
+)
+
+# Línea de 45 grados (y = x)
+val_min = float(min(reales_planos.min(), predicciones_planas.min()))
+val_max = float(max(reales_planos.max(), predicciones_planas.max()))
+ax1.plot(
+    [val_min, val_max], [val_min, val_max],
+    color="#E63946", linestyle="--", linewidth=2, label="Predicción ideal ($y = \hat{y}$)"
+)
+
+ax1.set_title("Predicciones vs. Valores Reales (Test)", fontsize=12, fontweight="bold")
+ax1.set_xlabel("Pedidos Reales ($y$)", fontsize=11)
+ax1.set_ylabel("Pedidos Predichos ($\hat{y}$)", fontsize=11)
+ax1.grid(True, linestyle=":", alpha=0.6)
+ax1.legend(loc="upper left")
+
+# Caja de métricas
+caja_texto = (
+    f"Época óptima: {mejor_epoca}\n"
+    f"$R^2$: {r2:.3f}\n"
+    f"MAE: {mae:.1f}\n"
+    f"RMSE: {rmse:.1f}"
+)
+ax1.text(
+    0.95, 0.05, caja_texto,
+    transform=ax1.transAxes, fontsize=10,
+    verticalalignment="bottom", horizontalalignment="right",
+    bbox=dict(boxstyle="round,pad=0.5", facecolor="#F8F9FA", edgecolor="#CCCCCC", alpha=0.9)
+)
+
+# --- PANEL 2: Residuos vs Pedidos Reales ---
+ax2.scatter(
+    reales_planos, residuos,
+    alpha=0.55, color="#2A9D8F", edgecolors="none", s=38, label="Residuo ($y - \hat{y}$)"
+)
+ax2.axhline(0, color="#E63946", linestyle="--", linewidth=2, label="Error cero ($y = \hat{y}$)")
+ax2.set_title("Análisis de Residuos", fontsize=12, fontweight="bold")
+ax2.set_xlabel("Pedidos Reales ($y$)", fontsize=11)
+ax2.set_ylabel("Residuo ($y - \hat{y}$)", fontsize=11)
+ax2.grid(True, linestyle=":", alpha=0.6)
+ax2.legend(loc="upper left")
+
+fig.suptitle("Diagnóstico de Predicciones del Modelo", fontsize=14, fontweight="bold")
+fig.tight_layout()
+
+fig.savefig(ARCHIVO_GRAFICA_PREDICCIONES, dpi=180)
+fig.savefig(ARCHIVO_GRAFICA_PREDICCIONES_PDF)
+plt.close(fig)
+
+print(f"  Gráfica PNG guardada en: {ARCHIVO_GRAFICA_PREDICCIONES}")
+print(f"  Gráfica PDF guardada en: {ARCHIVO_GRAFICA_PREDICCIONES_PDF}")
+print()
+print("=" * 60)
+print("  LISTO. Modelo optimizado y evaluado con Early Stopping.")
 print("=" * 60)
