@@ -269,8 +269,52 @@ def figura_mapa_zoologico():
     print("Figura guardada: mapa_zoologico_ia.pdf / .png")
 
 
+def figura_clever_hans_real():
+    """Genera la comparativa con las fotos originales del paper de LIME (Ribeiro et al., KDD 2016)."""
+    ruta_husky = CARPETA_SALIDA / "husky.png"
+    ruta_exp = CARPETA_SALIDA / "exp_husky.png"
+
+    if not (ruta_husky.is_file() and ruta_exp.is_file()):
+        print("Fotos reales no encontradas en graficas/, omitiendo...")
+        return
+
+    import matplotlib.image as mpimg
+    img_husky = mpimg.imread(ruta_husky)
+    img_exp = mpimg.imread(ruta_exp)
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(8.5, 4.2), dpi=250)
+
+    # Panel 1: Original
+    ax1.imshow(img_husky)
+    ax1.set_title("(a) Foto Original de Entrada\n(Husky en la nieve)", fontsize=10.5, fontweight="bold", pad=8)
+    ax1.text(
+        0.5, -0.12, "Predicción del Modelo: \"LOBO\"\n(Error en Prueba)", transform=ax1.transAxes,
+        ha="center", fontsize=9, fontweight="bold", color=CORAL,
+        bbox=dict(boxstyle="round,pad=0.35", facecolor="#FDEDEC", edgecolor=CORAL)
+    )
+    ax1.axis("off")
+
+    # Panel 2: LIME explanation
+    ax2.imshow(img_exp)
+    ax2.set_title("(b) Explicación con LIME\n(Píxeles que activaron la neurona)", fontsize=10.5, fontweight="bold", pad=8)
+    ax2.text(
+        0.5, -0.12, "Atajo Espurio:\n¡La red solo miró la nieve!", transform=ax2.transAxes,
+        ha="center", fontsize=9, fontweight="bold", color=TEAL,
+        bbox=dict(boxstyle="round,pad=0.35", facecolor="#E8F8F5", edgecolor=TEAL)
+    )
+    ax2.axis("off")
+
+    fig.suptitle("Fotos Reales del Paper: \"Why Should I Trust You?\" (Ribeiro et al., KDD 2016)", fontsize=11.5, fontweight="bold")
+    plt.tight_layout()
+    fig.savefig(CARPETA_SALIDA / "clever_hans_lobo_nieve_real.pdf", bbox_inches="tight")
+    fig.savefig(CARPETA_SALIDA / "clever_hans_lobo_nieve_real.png", bbox_inches="tight")
+    plt.close(fig)
+    print("Figura guardada: clever_hans_lobo_nieve_real.pdf / .png")
+
+
 if __name__ == "__main__":
     figura_autopsia_peores_errores()
     figura_clever_hans()
+    figura_clever_hans_real()
     figura_interpolacion_vs_extrapolacion()
     figura_mapa_zoologico()

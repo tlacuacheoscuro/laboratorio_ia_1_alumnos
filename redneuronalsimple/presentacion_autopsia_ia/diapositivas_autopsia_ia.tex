@@ -209,31 +209,32 @@
 % -----------------------------------------------------------------------------
 % SLIDE 6: CASO DE ESTUDIO 1 — EL LOBO Y LA NIEVE
 % -----------------------------------------------------------------------------
-\begin{frame}{Caso de Estudio 1: El Clasificador de Lobos vs. Perros}
-  \begin{columns}[c]
-    \begin{column}{0.55\textwidth}
+\begin{frame}{Caso de Estudio 1: El Lobo y la Nieve (Fotos Reales)}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
       \begin{center}
-        \includegraphics[width=\linewidth]{clever_hans_lobo_nieve.pdf}
+        \includegraphics[width=\linewidth,height=0.68\textheight,keepaspectratio]{clever_hans_lobo_nieve_real.pdf}
       \end{center}
     \end{column}
 
-    \begin{column}{0.43\textwidth}
-      \begin{block}{El Famoso Experimento de LIME (2016)}
+    \begin{column}{0.44\textwidth}
+      \begin{block}{El Paper Seminal de LIME (2016)}
         \scriptsize
-        Investigadores de la Universidad de Washington entrenaron una red neuronal profunda para distinguir fotos de lobos y perros esquimales (\textit{Huskies}):
+        Ribeiro et al. entrenaron una red profunda para \textbf{Lobos vs. Huskies}:
         \begin{itemize}
-          \item \textbf{Resultado oficial}: $98\%$ de precisión en prueba.
+          \item Precisión casi perfecta en test ($>95\%$).
+          \item Ante este husky real, predijo \alert{\textbf{``LOBO''}} con total seguridad.
         \end{itemize}
       \end{block}
 
-      \vspace{-0.1cm}
-      \begin{alertblock}{La Sorpresa Inesperada}
+      \vspace{-0.15cm}
+      \begin{alertblock}{La Autopsia de Píxeles}
         \scriptsize
-        Al auditar las características que activaban las neuronas:
+        Al aplicar LIME para ver qué activó la neurona:
         \begin{itemize}
-          \item Todas las fotos de lobos en el dataset tenían \textbf{nieve blanca de fondo}.
-          \item Todas las fotos de perros estaban en jardines verdes.
-          \item \textbf{La red aprendió un detector de nieve}, no un detector de lobos.
+          \item El perro fue \textbf{ignorado por completo}.
+          \item La decisión se basó exclusivamente en la \textbf{nieve blanca del fondo}.
+          \item \textit{Conclusión}: La red jamás aprendió animales; aprendió un detector de nieve.
         \end{itemize}
       \end{alertblock}
     \end{column}
