@@ -1,0 +1,238 @@
+\documentclass[aspectratio=169,11pt]{beamer}
+
+\usepackage[spanish,es-nodecimaldot]{babel}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{listings}
+
+\definecolor{azul}{HTML}{174A7E}
+\definecolor{azulclaro}{HTML}{DCECF8}
+\definecolor{verde}{HTML}{2E7D32}
+\definecolor{gris}{HTML}{F3F5F7}
+\definecolor{naranja}{HTML}{A64B00}
+\usetheme{Madrid}
+\setbeamercolor{structure}{fg=azul}
+\setbeamercolor{frametitle}{fg=azul}
+\setbeamercolor{block title}{bg=azul,fg=white}
+\setbeamercolor{block body}{bg=azulclaro,fg=black!85}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}{\hfill\insertframenumber\hspace{0.4cm}\vspace{0.2cm}}
+
+\lstdefinestyle{codigo}{
+  language=Python,
+  basicstyle=\ttfamily\scriptsize,
+  backgroundcolor=\color{gris},
+  frame=single,
+  breaklines=true,
+  keepspaces=true,
+  showstringspaces=false,
+  columns=fullflexible,
+  keywordstyle=\color{azul}\bfseries,
+  commentstyle=\color{verde},
+  stringstyle=\color{naranja}
+}
+
+\title{Del CSV al modelo}
+\subtitle{Analizar, detectar señales y predecir con datos de ventas}
+\author{Laboratorio de Inteligencia Artificial}
+\date{}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+\end{frame}
+
+\begin{frame}{La pregunta de hoy}
+  \begin{center}
+    \Large ¿Podemos estimar cuántas unidades se venderán\
+    usando visitas y descuento?
+  \end{center}
+  \vfill
+  \begin{itemize}
+    \item Partimos de una tabla CSV, como en la primera práctica.
+    \item Usamos limpieza y agrupación antes de modelar.
+    \item Evaluamos una predicción con datos que el modelo no vio.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{El recorrido: de tabla a evidencia}
+  \begin{enumerate}
+    \item Cargar y revisar: tipos, faltantes, rangos.
+    \item Transformar: crear el importe y agrupar por ciudad.
+    \item Investigar: marcar posibles valores atípicos.
+    \item Aprender: ajustar una regresión a partir del CSV.
+    \item Evaluar: comparar el error con una predicción de referencia.
+  \end{enumerate}
+  \vfill
+  \begin{block}{Conexión con clases anteriores}
+    Es aprendizaje supervisado: el CSV contiene entradas y una respuesta conocida para aprender, como en la predicción de estaturas.
+  \end{block}
+\end{frame}
+
+\begin{frame}{El conjunto de datos}
+  \begin{center}
+    \begin{tabular}{lrrr}
+      \toprule
+      fecha & visitas & descuento\_pct & unidades \\
+      \midrule
+      2026-01-01 & 95 & 7 & 12 \\
+      2026-01-02 & 372 & 25 & 39 \\
+      2026-01-03 & 257 & 9 & 29 \\
+      \bottomrule
+    \end{tabular}
+  \end{center}
+  \begin{itemize}
+    \item 240 días sintéticos; hay una celda faltante y dos ventas inusuales.
+    \item La columna \texttt{unidades} es el objetivo que queremos estimar.
+    \item Las variables \texttt{visitas} y \texttt{descuento\_pct} son las entradas.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{1. Leer y auditar antes de analizar}
+  \begin{lstlisting}[style=codigo]
+with open("ventas_clase.csv", newline="") as archivo:
+    lector = csv.DictReader(archivo)
+    filas = list(lector)
+
+print(lector.fieldnames)
+print(filas[:2])
+  \end{lstlisting}
+  \begin{block}{Por qué importa}
+    CSV guarda texto. Las conversiones a número deben ser explícitas, y una celda vacía requiere una decisión antes de calcular.
+  \end{block}
+\end{frame}
+
+\begin{frame}[fragile]{2. Limpiar, transformar y resumir}
+  \begin{lstlisting}[style=codigo]
+limpios = []
+for fila in filas:
+    try:
+        unidades = float(fila["unidades"])
+        precio = float(fila["precio_unitario"])
+    except ValueError:
+        continue
+    fila["importe"] = unidades * precio
+    limpios.append(fila)
+  \end{lstlisting}
+  \begin{itemize}
+    \item La práctica descarta filas incompletas solo en los campos necesarios.
+    \item El resumen por ciudad describe el CSV; no explica por qué difieren las ciudades.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{3. Valores atípicos: señal para investigar}
+  Para una variable numérica, el rango intercuartílico es $IQR=Q_3-Q_1$.
+  \[
+    \text{marcar si } x < Q_1-1.5\,IQR
+    \quad\text{o}\quad x > Q_3+1.5\,IQR
+  \]
+  \begin{itemize}
+    \item La regla detecta valores alejados del centro de la distribución.
+    \item Una promoción exitosa puede ser un valor extremo real.
+    \item Igual que con Benford: anomalía no significa fraude; hay que revisar contexto y origen.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{4. Entrenamiento y prueba en orden temporal}
+  \begin{center}
+    \begin{tabular}{c|c}
+      \toprule
+      \textbf{Primeros días: entrenamiento} & \textbf{Últimos días: prueba} \\
+      \midrule
+      aprende los coeficientes & mide errores en días no usados \\
+      \bottomrule
+    \end{tabular}
+  \end{center}
+  \vfill
+  \begin{itemize}
+    \item En datos temporales, no mezclamos el futuro con el pasado.
+    \item Un buen resultado de entrenamiento no basta: interesa la prueba.
+    \item No usamos columnas que revelen directamente la respuesta: eso sería fuga de información.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{5. Un modelo pequeño y transparente}
+  Suponemos una relación lineal:
+  \[
+    \widehat{unidades}=b_0+b_1\,visitas+b_2\,descuento
+  \]
+  \begin{itemize}
+    \item \texttt{numpy.linalg.lstsq} busca coeficientes que ajusten el entrenamiento.
+    \item No es una red neuronal, pero practica el mismo ciclo: ejemplos, ajuste y evaluación.
+    \item Los coeficientes describen asociaciones en estos datos sintéticos, no causalidad.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{¿Qué significa el error MAE?}
+  \[
+    MAE=\frac{1}{n}\sum_{i=1}^{n}|y_i-\hat{y}_i|
+  \]
+  \begin{itemize}
+    \item Si el MAE es 4, la predicción se equivoca en promedio por 4 unidades.
+    \item Comparamos con una referencia simple: predecir siempre la media del entrenamiento.
+    \item El modelo solo es útil si supera una referencia razonable en datos de prueba.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{El núcleo del ajuste en pocas líneas}
+  \begin{lstlisting}[style=codigo]
+x_train = np.column_stack([np.ones(len(train)), train_x])
+x_test = np.column_stack([np.ones(len(test)), test_x])
+b = np.linalg.lstsq(x_train, y_train, rcond=None)[0]
+prediccion = x_test @ b
+mae = np.mean(np.abs(y_test - prediccion))
+  \end{lstlisting}
+  \begin{block}{Antes de ejecutar}
+    ¿Qué variable creen que pesará más? ¿Qué cambiaría si quitamos el descuento de las entradas?
+  \end{block}
+\end{frame}
+
+\begin{frame}{Resultados: describir, no exagerar}
+  \begin{itemize}
+    \item Revisar cuántas filas se conservaron y cuántos posibles atípicos aparecieron.
+    \item Comparar MAE de referencia y MAE del modelo.
+    \item Si falla, investigar: ¿datos ruidosos, relación no lineal, cambios con el tiempo?
+  \end{itemize}
+  \vfill
+  \begin{alertblock}{Límite del ejemplo}
+    Los datos son sintéticos y sencillos. Una asociación predictiva no demuestra que aumentar visitas o descuentos cause más ventas.
+  \end{alertblock}
+\end{frame}
+
+\begin{frame}{Conexión con el robot y otros temas}
+  \begin{itemize}
+    \item Un CSV de episodios del robot puede tener sensores, acción, choque y recompensa.
+    \item El mismo flujo permite predecir una recompensa o detectar episodios extraños.
+    \item Embeddings y RAG son otra ruta: buscar semánticamente en texto asociado a los registros, no sustituir esta auditoría tabular.
+  \end{itemize}
+  \vfill
+  \begin{block}{Idea común}
+    Los modelos dependen de la calidad de los datos, de una pregunta clara y de una evaluación honesta.
+  \end{block}
+\end{frame}
+
+\begin{frame}{Práctica: cambia una cosa y comprueba}
+  \begin{enumerate}
+    \item Ejecutar \texttt{python3 generar\_ventas.py}.
+    \item Ejecutar \texttt{python3 analizar\_ventas.py}.
+    \item Cambiar las entradas a solo \texttt{visitas}; comparar los MAE.
+    \item Probar otra proporción temporal, por ejemplo 70/30.
+    \item Inspeccionar las fechas marcadas como atípicas antes de decidir eliminarlas.
+  \end{enumerate}
+  \vfill
+  \textbf{Entrega:} cambio, predicción previa, resultado observado y una limitación del análisis.
+\end{frame}
+
+\begin{frame}{Cierre}
+  \begin{center}
+    \Large CSV $\rightarrow$ preguntas $\rightarrow$ modelo $\rightarrow$ evaluación
+  \end{center}
+  \vfill
+  \centering
+  Un modelo no arregla datos confusos ni convierte una correlación en causa.
+\end{frame}
+
+\end{document}
