@@ -1,0 +1,331 @@
+\documentclass[aspectratio=169,11pt]{beamer}
+
+\usepackage[spanish,es-nodecimaldot]{babel}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{listings}
+\usepackage{pgfplots}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta}
+\pgfplotsset{compat=1.18}
+
+\definecolor{azul}{HTML}{174A7E}
+\definecolor{azulclaro}{HTML}{DCECF8}
+\definecolor{verde}{HTML}{2E7D32}
+\definecolor{gris}{HTML}{F3F5F7}
+\definecolor{naranja}{HTML}{A64B00}
+\definecolor{rojo}{HTML}{B71C1C}
+
+\usetheme{Madrid}
+\setbeamercolor{structure}{fg=azul}
+\setbeamercolor{frametitle}{fg=azul}
+\setbeamercolor{block title}{bg=azul,fg=white}
+\setbeamercolor{block body}{bg=azulclaro,fg=black!85}
+\setbeamercolor{alerted text}{fg=rojo}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}{\hfill\insertframenumber\hspace{0.4cm}\vspace{0.2cm}}
+
+\lstdefinestyle{codigo}{
+  language=Python,
+  basicstyle=\ttfamily\scriptsize,
+  backgroundcolor=\color{gris},
+  frame=single,
+  breaklines=true,
+  keepspaces=true,
+  showstringspaces=false,
+  columns=fullflexible,
+  keywordstyle=\color{azul}\bfseries,
+  commentstyle=\color{verde},
+  stringstyle=\color{naranja}
+}
+
+\title{El Pipeline Completo de IA}
+\subtitle{Banderazo inicial del proyecto final (10 de noviembre -- 15 de enero)}
+\author{Laboratorio de Inteligencia Artificial}
+\date{}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+\end{frame}
+
+\begin{frame}{El objetivo de hoy: unir todas las piezas}
+  \begin{center}
+    \Large De ejercicios aislados a un \textbf{sistema completo y verificable}
+  \end{center}
+  \vfill
+  \begin{itemize}
+    \item Durante el semestre construimos ladrillos individuales: agentes, redes neuronales, espacios latentes, vectores semánticos y auditoría de tablas CSV.
+    \item Un modelo aislado no es un proyecto: un proyecto es un \textbf{pipeline reproducible} desde el dato crudo hasta la autopsia de sus errores.
+    \item Hoy damos el banderazo de salida: tenemos \textbf{dos meses} (cierre: \textbf{15 de enero}) para diseñar, construir y defender un pipeline completo.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Mapa de lo que ya sabemos hacer}
+  \begin{columns}[T]
+    \begin{column}{0.32\textwidth}
+      \begin{block}{1. Datos y Supervisión}
+        \small
+        \begin{itemize}
+          \item Auditoría de CSV y limpieza.
+          \item Anomalías (Benford, IQR).
+          \item Regresión y Redes Neuronales.
+          \item \emph{Early stopping} e hiperparámetros.
+        \end{itemize}
+      \end{block}
+    \end{column}
+    \begin{column}{0.32\textwidth}
+      \begin{block}{2. Espacio Latente}
+        \small
+        \begin{itemize}
+          \item Emergencia y autoorganización.
+          \item Mapas de Kohonen (SOM).
+          \item Autoencoders clásicos.
+          \item Modelos generativos (VAE).
+        \end{itemize}
+      \end{block}
+    \end{column}
+    \begin{column}{0.32\textwidth}
+      \begin{block}{3. Texto y Contexto}
+        \small
+        \begin{itemize}
+          \item Embeddings semánticos.
+          \item Similitud coseno y $k$-NN.
+          \item Fragmentación y RAG.
+          \item Auto-atención en Transformers.
+        \end{itemize}
+      \end{block}
+    \end{column}
+  \end{columns}
+  \vfill
+  \centering
+  \textbf{Regla de oro del proyecto:} no hay que meter todos los modelos a la fuerza; hay que elegir la ruta adecuada para una pregunta clara.
+\end{frame}
+
+\begin{frame}{Las 6 etapas de un Pipeline de IA}
+  \centering
+  \begin{tikzpicture}[
+    node distance=0.35cm,
+    caja/.style={draw=azul, fill=azulclaro, rounded corners=3pt, minimum width=2.2cm, minimum height=1.15cm, align=center, font=\scriptsize\bfseries}
+  ]
+    \node[caja] (e1) {1. Pregunta\\y Auditoría};
+    \node[caja, right=of e1] (e2) {2. Limpieza y\\Transformación};
+    \node[caja, right=of e2] (e3) {3. Revisión de\\Atípicos};
+    \node[caja, right=of e3] (e4) {4. Partición\\sin Fuga};
+    \node[caja, right=of e4] (e5) {5. Referencia\\vs. Modelo};
+    \node[caja, right=of e5, fill=verde!20, draw=verde] (e6) {6. Autopsia\\y Límites};
+
+    \draw[-{Stealth[length=2.5mm]}, thick, azul] (e1) -- (e2);
+    \draw[-{Stealth[length=2.5mm]}, thick, azul] (e2) -- (e3);
+    \draw[-{Stealth[length=2.5mm]}, thick, azul] (e3) -- (e4);
+    \draw[-{Stealth[length=2.5mm]}, thick, azul] (e4) -- (e5);
+    \draw[-{Stealth[length=2.5mm]}, thick, verde] (e5) -- (e6);
+  \end{tikzpicture}
+  \vfill
+  \begin{itemize}
+    \item Si falla la Etapa 1 o 2, el modelo aprenderá basura (\emph{garbage in, garbage out}).
+    \item Si falla la Etapa 4, el resultado será un espejismo por fuga de información.
+    \item Si falta la Etapa 5 o 6, no sabremos si el modelo aporta valor real o dónde se rompe.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Tres rutas posibles para su proyecto final}
+  \begin{description}
+    \item[Ruta A — Tabular y Predicción Supervisada:]
+      CSV propio o de simulación (energía, demanda, sensores del robot). Limpieza documentada, detección de atípicos con IQR, regresión o red neuronal con \emph{early stopping}, superando a una referencia en datos de prueba.
+    \vspace{0.2cm}
+    \item[Ruta B — Representación y Espacio Latente:]
+      SOM, Autoencoder o VAE sobre datos multivariados o registros de episodios para descubrir agrupamientos, comprimir dimensiones, interpolar estados o detectar anomalías de reconstrucción.
+    \vspace{0.2cm}
+    \item[Ruta C — Texto, Embeddings y Sistema RAG:]
+      Corpus de documentos reales del equipo, comparación de estrategias de \emph{chunking}, base vectorial con similitud coseno y evaluación rigurosa de aciertos y fallos de recuperación.
+  \end{description}
+\end{frame}
+
+\begin{frame}[fragile]{Etapas 1 a 3 en código: auditar antes de modelar}
+  \begin{lstlisting}[style=codigo]
+def limpiar_y_transformar(filas_crudas):
+    limpios = []
+    for fila in filas_crudas:
+        try:
+            equipos = float(fila["equipos_activos"])
+            consumo = float(fila["consumo_kwh"])
+        except ValueError:
+            continue  # Celda vacia o texto invalido
+        if equipos < 0 or consumo <= 0:
+            continue  # Regla de dominio: fisicamente imposible
+        limpios.append(fila)
+    return limpios
+  \end{lstlisting}
+  \begin{block}{Distinción clave para su proyecto}
+    Un valor \textbf{imposible} (ej. $-5$ equipos activos) se corrige o descarta por regla de dominio. Un valor \textbf{extremo pero posible} (marcado por IQR) se investiga antes de decidir si se excluye.
+  \end{block}
+\end{frame}
+
+\begin{frame}{Etapa 4: la trampa mortal de la fuga de datos}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{block}{Fuga temporal (incorrecto)}
+        \small
+        Mezclar al azar días de diciembre en el entrenamiento y evaluar en días de octubre.\\
+        \vspace{0.15cm}
+        \textbf{Consecuencia:} el modelo usa pistas del futuro para «adivinar» el pasado.
+      \end{block}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{block}{Fuga por columna (incorrecto)}
+        \small
+        Predecir \texttt{consumo\_kwh} incluyendo como entrada \texttt{costo\_factura} (que se calculó multiplicando el consumo por la tarifa).\\
+        \vspace{0.15cm}
+        \textbf{Consecuencia:} error casi cero en papel, modelo inútil en la realidad.
+      \end{block}
+    \end{column}
+  \end{columns}
+  \vfill
+  \centering
+  \textbf{Pregunta de control:} ¿todas mis variables de entrada $X$ existen \emph{antes} del momento de predecir?
+\end{frame}
+
+\begin{frame}{Etapa 5: ningún modelo vale sin una referencia (\emph{Baseline})}
+  \begin{columns}[T]
+    \begin{column}{0.62\textwidth}
+      \centering
+      \begin{tikzpicture}
+        \begin{axis}[
+          ybar,
+          bar width=28pt,
+          width=\linewidth,
+          height=5.2cm,
+          ylabel={Error MAE en prueba (kWh)},
+          symbolic x coords={Referencia (Media),Modelo Lineal},
+          xtick=data,
+          ymin=0,
+          ymax=27,
+          ymajorgrids=true,
+          grid style={gris},
+          nodes near coords,
+          nodes near coords style={font=\small\bfseries},
+          every node near coord/.append style={/pgf/number format/fixed, /pgf/number format/precision=2},
+          tick label style={font=\scriptsize},
+          label style={font=\scriptsize},
+        ]
+          \addplot[fill=naranja!75,draw=naranja] coordinates {
+            (Referencia (Media),22.42)
+            (Modelo Lineal,4.83)
+          };
+        \end{axis}
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.35\textwidth}
+      \small
+      \textbf{Por qué exigir un baseline}
+      \begin{itemize}
+        \item Decir «mi modelo tiene MAE de 4.83» no significa nada por sí solo.
+        \item Compararlo contra predecir la media del entrenamiento (MAE 22.42) demuestra una reducción del \textbf{78.5\%} del error en datos no vistos.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Etapa 6: autopsia de resultados en datos de prueba}
+  \begin{columns}[T]
+    \begin{column}{0.58\textwidth}
+      \centering
+      \begin{tikzpicture}
+        \begin{axis}[
+          width=\linewidth,
+          height=5.1cm,
+          xlabel={Consumo real en prueba (kWh)},
+          ylabel={Consumo predicho (kWh)},
+          grid=major,
+          grid style={gris},
+          tick label style={font=\scriptsize},
+          label style={font=\scriptsize},
+          xmin=60, xmax=180,
+          ymin=60, ymax=180,
+        ]
+          \addplot[domain=60:180, samples=2, dashed, color=verde, thick] {x};
+          \addplot[
+            only marks,
+            mark=*,
+            mark size=1.6pt,
+            color=azul,
+            opacity=0.8
+          ] table[
+            col sep=comma,
+            x=consumo_kwh,
+            y=prediccion,
+          ] {predicciones_prueba.csv};
+        \end{axis}
+      \end{tikzpicture}
+    \end{column}
+    \begin{column}{0.38\textwidth}
+      \small
+      \textbf{Qué buscamos en esta gráfica}
+      \begin{itemize}
+        \item La línea punteada es la predicción perfecta ($\hat{y} = y$).
+        \item Inspeccionamos los 3 puntos más alejados de la diagonal: ¿qué ocurrió en esas fechas?
+        \item En la calificación final vale más explicar un fallo con rigor que esconderlo.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Cronograma de 2 meses: del 10 de noviembre al 15 de enero}
+  \begin{center}
+    \scriptsize
+    \begin{tabular}{llp{7.6cm}}
+      \toprule
+      \textbf{Hito} & \textbf{Plazo} & \textbf{Entregable verificable} \\
+      \midrule
+      \textbf{1. Banderazo y Datos} & Nov (Sem. 1--2) & Acta de proyecto (\texttt{plantilla\_propuesta.md}) + carga y auditoría del dataset crudo (Etapas 1 y 2). \\
+      \addlinespace[3pt]
+      \textbf{2. Limpieza y Referencia} & Fines Nov / Dic & Reglas de limpieza, análisis de atípicos, partición sin fuga y métrica del \emph{Baseline} (Etapas 3 y 4). \\
+      \addlinespace[3pt]
+      \textbf{3. Modelo e Iteración} & Diciembre & Entrenamiento del modelo principal, ajuste de hiperparámetros y comparación contra referencia (Etapa 5). \\
+      \addlinespace[3pt]
+      \textbf{4. Autopsia y Entrega} & \textbf{15 de enero} & Análisis de los peores errores en prueba, gráficas finales, límites del estudio y defensa (Etapa 6). \\
+      \bottomrule
+    \end{tabular}
+  \end{center}
+  \vspace{0.15cm}
+  \begin{block}{Consejo práctico}
+    \small Un pipeline sencillo que corre completo de la Etapa 1 a la 6 en noviembre es mucho mejor que un modelo gigante que no llega a evaluarse en enero.
+  \end{block}
+\end{frame}
+
+\begin{frame}{¿Cómo se evaluará el proyecto el 15 de enero?}
+  \begin{itemize}
+    \item \textbf{Claridad de la pregunta y calidad de los datos (25\%):} auditoría explícita de faltantes, tipos, rangos y justificación de qué se conserva o descarta.
+    \item \textbf{Diseño sin fuga y referencia justa (25\%):} separación correcta de entrenamiento/prueba y un \emph{baseline} bien calculado.
+    \item \textbf{Implementación y comprensión del modelo (25\%):} código limpio, reproducible y capaz de explicarse línea por línea sin cajas negras mágicas.
+    \item \textbf{Autopsia de errores y honestidad técnica (25\%):} inspección de fallos concretos y distinción clara entre capacidad predictiva y causalidad.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Taller de hoy: arrancar el motor}
+  \begin{enumerate}
+    \item Ejecutar el generador y el pipeline base de referencia:
+      \begin{center}
+        \texttt{python3 generar\_datos\_ejemplo.py} \quad y \quad \texttt{python3 pipeline\_base.py}
+      \end{center}
+    \item Inspeccionar las 6 etapas en consola y el archivo generado \texttt{predicciones\_prueba.csv}.
+    \item Hacer un experimento rápido en \texttt{pipeline\_base.py}: quitar \texttt{equipos\_activos} de \texttt{ENTRADAS} y medir cuánto sube el MAE en prueba.
+    \item Abrir \texttt{plantilla\_propuesta.md} y redactar el \textbf{Acta de Inicio} de su propio proyecto (Ruta A, B o C).
+  \end{enumerate}
+\end{frame}
+
+\begin{frame}{Cierre: el banderazo inicial}
+  \begin{center}
+    \Large Pregunta clara $\rightarrow$ Datos auditados $\rightarrow$ Referencia $\rightarrow$ Modelo $\rightarrow$ Autopsia
+  \end{center}
+  \vfill
+  \centering
+  Hoy empieza la construcción de su proyecto final.\\
+  Meta: llegar al \textbf{15 de enero} con un pipeline completo, reproducible y defendible.
+\end{frame}
+
+\end{document}
